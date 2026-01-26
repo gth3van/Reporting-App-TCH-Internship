@@ -38,7 +38,7 @@ def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
     # Header
     pdf.cell(0, 10, "BERITA ACARA PERBAIKAN ALAT MEDIS", ln=True, align='C')
     pdf.set_font("Arial", 'I', 10)
-    pdf.cell(0, 10, "RS CINTA KASIH TZU CHI - DEPARTEMEN ATEM", ln=True, align='C')
+    pdf.cell(0, 10, "TZU CHI HOSPITAL - DEPARTEMEN ATEM", ln=True, align='C')
     pdf.line(10, 30, 200, 30)
     pdf.ln(10)
     
@@ -386,3 +386,4 @@ elif menu == "🔐 Admin Database":
 
     elif password:
         st.error("❌ Password Salah!")
+
