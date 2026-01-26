@@ -7,16 +7,14 @@ from datetime import datetime
 # ==========================================
 # ⚙️ KONFIGURASI TELEGRAM (WAJIB DIISI!)
 # ==========================================
-# Masukkan Token dari BotFather (tetap pakai tanda kutip)
+# Masukkan Token & ID yang sudah kamu dapatkan sebelumnya
 BOT_TOKEN = "8433442999:AAGjTv0iZEm_xtvlQTUBT11PUyxUYMtGxFQ" 
-
-# Masukkan Chat ID Grup (Jangan lupa tanda minus jika ada)
 CHAT_ID = "-1003692690153"
 # ==========================================
 
+# --- FUNGSI KIRIM PESAN ---
 def kirim_notifikasi_telegram(pesan):
     try:
-        # Cek apakah token masih default
         if "GANTI" in BOT_TOKEN or "GANTI" in CHAT_ID:
             st.error("⚠️ TOKEN/CHAT ID BELUM DIISI DI KODINGAN!")
             return False
@@ -24,14 +22,10 @@ def kirim_notifikasi_telegram(pesan):
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         params = {"chat_id": CHAT_ID, "text": pesan, "parse_mode": "Markdown"}
         
-        # --- PERBAIKAN DISINI ---
         response = requests.get(url, params=params)
-        
-        # Cek jawaban dari Telegram
         if response.status_code == 200:
             return True
         else:
-            # Tampilkan pesan error ASLI dari Telegram biar ketahuan salahnya
             st.error(f"❌ Gagal Kirim! Telegram bilang: {response.text}")
             return False
             
@@ -53,6 +47,9 @@ st.markdown("""
     }
     .status-otw {
         background-color: #ffd700; color: black; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold;
+    }
+    .status-pending {
+        background-color: #6c757d; color: white; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold;
     }
     @keyframes blinker { 50% { opacity: 0.8; } }
 </style>
@@ -99,7 +96,6 @@ if menu == "📝 Buat Laporan":
                 }])
                 save_data(pd.concat([df, new_data], ignore_index=True))
                 
-                # --- KIRIM TELEGRAM ---
                 pesan = f"🚨 *SOS! DARURAT MEDIS!* 🚨\n\n📍 Lokasi: *{ruangan}*\n⚠️ Status: *EMERGENCY*\n🕒 Waktu: {waktu}\n\n_Mohon teknisi segera meluncur!_"
                 kirim_notifikasi_telegram(pesan)
                 
@@ -133,13 +129,12 @@ if menu == "📝 Buat Laporan":
                     }])
                     save_data(pd.concat([df, new_data], ignore_index=True))
                     
-                    # --- KIRIM TELEGRAM ---
                     icon = "⚡" if prioritas == "High (Urgent)" else "📝"
                     sn_info = f"(SN: {no_serial})" if no_serial else ""
                     pesan = f"{icon} *Tiket Baru Masuk* {icon}\n\n🆔 ID: `{new_id}`\n📍 Lokasi: *{ruangan}*\n🛠 Alat: {nama_alat} {sn_info}\n👤 Pelapor: {pelapor}\n⚠️ Prioritas: {prioritas}\n📝 Keluhan: {keluhan}\n\n_Silakan cek dashboard._"
                     kirim_notifikasi_telegram(pesan)
                     
-                    st.success(f"✅ Laporan Terkirim & Notifikasi masuk ke Grup Telegram! ID: {new_id}")
+                    st.success(f"✅ Laporan Terkirim! ID: {new_id}")
                 else:
                     st.error("Mohon lengkapi data.")
 
@@ -164,6 +159,10 @@ elif menu == "🔍 Cek Status Laporan":
                 with cols[2]:
                     if row['Status'] == 'OPEN': st.write("⏳ Menunggu Teknisi")
                     elif row['Status'] == 'ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {row["Teknisi"]} OTW</div>', unsafe_allow_html=True)
+                    # --- STATUS BARU PENDING ---
+                    elif row['Status'] == 'PENDING': 
+                        st.markdown(f'<div class="status-pending">⏳ MENUNGGU VENDOR</div>', unsafe_allow_html=True)
+                        st.caption(f"Pending oleh: {row['Teknisi']}")
     else:
         st.write("Belum ada data.")
 
@@ -174,12 +173,12 @@ elif menu == "🔧 Dashboard Teknisi":
 
     df = load_data()
     if not df.empty:
-        # Sort Prio: Emergency > High > Normal
+        # --- 1. TIKET MASUK ---
+        st.subheader("📥 Tiket Masuk")
         prio_order = {"EMERGENCY": 0, "High (Urgent)": 1, "Normal": 2}
         df['prio_sort'] = df['Prioritas'].map(prio_order)
         tiket_open = df[df['Status'] == 'OPEN'].sort_values(by=['prio_sort', 'Waktu Lapor'])
         
-        st.subheader("📥 Tiket Masuk")
         if tiket_open.empty:
             st.info("Aman terkendali.")
         else:
@@ -190,10 +189,7 @@ elif menu == "🔧 Dashboard Teknisi":
                         if row['Prioritas'] == 'EMERGENCY': st.error(f"🚨 {row['Ruangan']}")
                         elif row['Prioritas'] == 'High (Urgent)': st.warning(f"⚡ {row['Ruangan']}")
                         else: st.info(f"🟢 {row['Ruangan']}")
-                        
-                        sn_display = f"SN: {row['Nomor Serial']}" if row['Nomor Serial'] != "-" else ""
                         st.write(f"🛠 **{row['Nama Alat']}**")
-                        if sn_display: st.caption(f"🆔 {sn_display}")
                         st.write(f"📝 {row['Keluhan']}")
                     with c2:
                         st.write(f"🕒 {row['Waktu Lapor']}")
@@ -204,12 +200,12 @@ elif menu == "🔧 Dashboard Teknisi":
                             df.loc[df['ID Tiket'] == row['ID Tiket'], 'Status'] = 'ON PROGRESS'
                             df.loc[df['ID Tiket'] == row['ID Tiket'], 'Teknisi'] = nama
                             save_data(df)
-                            
-                            # Info ke Telegram
-                            kirim_notifikasi_telegram(f"✅ Tiket `{row['ID Tiket']}` di *{row['Ruangan']}* sedang dikerjakan oleh **{nama}**.")
+                            kirim_notifikasi_telegram(f"✅ Tiket `{row['ID Tiket']}` diambil oleh **{nama}**.")
                             st.rerun()
 
         st.markdown("---")
+        
+        # --- 2. SEDANG DIKERJAKAN ---
         st.subheader("🛠 Sedang Dikerjakan")
         tiket_progress = df[df['Status'] == 'ON PROGRESS']
         
@@ -218,22 +214,56 @@ elif menu == "🔧 Dashboard Teknisi":
         else:
             for index, row in tiket_progress.iterrows():
                  with st.container(border=True):
-                    cols = st.columns([4, 2])
+                    cols = st.columns([3, 2])
                     with cols[0]:
                         sn_info = f"(SN: {row['Nomor Serial']})" if row['Nomor Serial'] != "-" else ""
-                        
-                        if row['Prioritas'] == 'EMERGENCY': st.error(f"🚨 {row['Ruangan']} - {row['Nama Alat']}")
-                        elif row['Prioritas'] == 'High (Urgent)': st.warning(f"⚡ {row['Ruangan']} - {row['Nama Alat']}")
-                        else: st.info(f"🟢 {row['Ruangan']} - {row['Nama Alat']}")
-                            
-                        st.write(f"🆔 {sn_info}")
-                        st.info(f"Dihandle oleh: **{row['Teknisi']}**")
+                        st.write(f"**{row['ID Tiket']}** - {row['Ruangan']}") 
+                        st.write(f"🛠 {row['Nama Alat']} {sn_info}")
+                        st.info(f"Oleh: **{row['Teknisi']}**")
                     with cols[1]:
-                        if st.button("✅ SELESAI", key=f"d{row['ID Tiket']}"):
+                        # TOMBOL SELESAI
+                        if st.button("✅ SELESAI", key=f"d{row['ID Tiket']}", type="primary"):
                             df.loc[df['ID Tiket'] == row['ID Tiket'], 'Status'] = 'DONE'
                             save_data(df)
-                            # Info ke Telegram
-                            kirim_notifikasi_telegram(f"🎉 Tiket `{row['ID Tiket']}` ({row['Nama Alat']}) telah **SELESAI** diperbaiki oleh {row['Teknisi']}.")
+                            kirim_notifikasi_telegram(f"🎉 Tiket `{row['ID Tiket']}` SELESAI diperbaiki oleh {row['Teknisi']}.")
+                            st.rerun()
+                        
+                        # --- FITUR BARU: TOMBOL PENDING ---
+                        if st.button("⏳ PENDING (VENDOR)", key=f"p{row['ID Tiket']}"):
+                            df.loc[df['ID Tiket'] == row['ID Tiket'], 'Status'] = 'PENDING'
+                            save_data(df)
+                            kirim_notifikasi_telegram(f"⚠️ Tiket `{row['ID Tiket']}` DIPENDING oleh {row['Teknisi']}.\n(Menunggu Vendor/Sparepart).")
+                            st.rerun()
+
+        st.markdown("---")
+
+        # --- 3. DAFTAR PENDING (SECTION BARU) ---
+        st.subheader("⏳ Ditunda / Menunggu Vendor")
+        tiket_pending = df[df['Status'] == 'PENDING']
+
+        if tiket_pending.empty:
+            st.caption("Tidak ada tiket yang dipending.")
+        else:
+             for index, row in tiket_pending.iterrows():
+                 with st.container(border=True):
+                    cols = st.columns([3, 2])
+                    with cols[0]:
+                        st.markdown(f"**{row['ID Tiket']}** - {row['Ruangan']} (PENDING)")
+                        st.write(f"🛠 {row['Nama Alat']}")
+                        st.caption(f"Teknisi Terakhir: {row['Teknisi']}")
+                    with cols[1]:
+                        # BISA DILANJUTKAN KEMBALI
+                        if st.button("▶️ LANJUT KERJAKAN", key=f"res{row['ID Tiket']}"):
+                            df.loc[df['ID Tiket'] == row['ID Tiket'], 'Status'] = 'ON PROGRESS'
+                            save_data(df)
+                            kirim_notifikasi_telegram(f"▶️ Tiket `{row['ID Tiket']}` DILANJUTKAN kembali oleh {row['Teknisi']}.")
+                            st.rerun()
+                            
+                        # ATAU LANGSUNG SELESAI DARI VENDOR
+                        if st.button("✅ SELESAI DARI VENDOR", key=f"vend{row['ID Tiket']}"):
+                            df.loc[df['ID Tiket'] == row['ID Tiket'], 'Status'] = 'DONE'
+                            save_data(df)
+                            kirim_notifikasi_telegram(f"🎉 Tiket `{row['ID Tiket']}` SELESAI (Setelah dari Vendor).")
                             st.rerun()
 
         st.markdown("---")
