@@ -7,6 +7,8 @@ from fpdf import FPDF
 from streamlit_drawable_canvas import st_canvas
 import base64
 import tempfile
+import numpy as np
+from PIL import Image
 
 # ==========================================
 # ⚙️ KONFIGURASI TELEGRAM & ADMIN
@@ -26,7 +28,6 @@ def kirim_notifikasi_telegram(pesan):
         return True
     except Exception:
         return False
-    
 
 # --- FUNGSI BIKIN PDF (BERITA ACARA) ---
 def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
@@ -80,10 +81,6 @@ def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
         pdf.ln(10)
         pdf.cell(0, 10, "Tanda Tangan User / Pelapor:", ln=True)
         # Convert numpy array from canvas to image file temporary
-        from PIL import Image
-        import numpy as np
-        
-        # Canvas return RGBA, convert to RGB
         img_data = signature_img.astype(np.uint8)
         im = Image.fromarray(img_data)
         
@@ -110,19 +107,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🌐 FUNGSI GOOGLE SHEETS (PENGGANTI EXCEL)
+# 🌐 FUNGSI GOOGLE SHEETS
 # ==========================================
-# Membuat koneksi ke Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    # Ambil data dari Google Sheet, jadikan DataFrame
-    # ttl=0 artinya jangan simpan di cache lama-lama (biar real time)
     try:
         df = conn.read(worksheet="Sheet1", ttl=0)
-        # Pastikan kolom-kolom ini string agar tidak error saat filter
         df = df.astype(str)
-        # Bersihkan string "nan" jika ada data kosong
         df = df.replace("nan", "-")
         return df
     except Exception as e:
@@ -130,10 +122,8 @@ def load_data():
         return pd.DataFrame()
 
 def save_data(df):
-    # Update data ke Google Sheet
     try:
         conn.update(worksheet="Sheet1", data=df)
-        # Bersihkan cache agar data terbaru langsung muncul
         st.cache_data.clear()
     except Exception as e:
         st.error(f"Gagal menyimpan data: {e}")
@@ -205,11 +195,10 @@ if menu == "📝 Buat Laporan":
 # ================= MENU 2: STATUS =================
 elif menu == "🔍 Cek Status Laporan":
     st.title("🔍 Cek Status Laporan")
-    if st.button("🔄 Refresh Status"): st.rerun() # Tombol refresh manual
+    if st.button("🔄 Refresh Status"): st.rerun()
     
     df = load_data()
     if not df.empty:
-        # Filter Status != DONE
         df_aktif = df[df['Status'] != 'DONE'].sort_values(by='Waktu Lapor', ascending=False)
         for index, row in df_aktif.iterrows():
             with st.container(border=True):
@@ -223,8 +212,6 @@ elif menu == "🔍 Cek Status Laporan":
                     sn_text = f"(SN: {row['Nomor Serial']})" if row['Nomor Serial'] != "-" else ""
                     st.write(f"📍 **{row['Ruangan']}** - {row['Nama Alat']} {sn_text}")
                     st.caption(f"Pelapor: {row['Pelapor']}")
-                    if row['Catatan'] != "-" and row['Catatan'] != "nan":
-                        st.info(f"📝 **Catatan:** {row['Catatan']}")
                 with cols[2]:
                     if row['Status'] == 'OPEN': st.write("⏳ Menunggu Teknisi")
                     elif row['Status'] == 'ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {row["Teknisi"]} OTW</div>', unsafe_allow_html=True)
@@ -233,90 +220,117 @@ elif menu == "🔍 Cek Status Laporan":
     else:
         st.write("Belum ada data.")
 
-# ================= MENU 3: TEKNISI (FITUR BARU PDF & TTD) =================
+# ================= MENU 3: TEKNISI (FULL COLOR & PDF) =================
 elif menu == "🔧 Dashboard Teknisi":
     st.title("🔧 Dashboard ATEM")
     if st.button("🔄 Refresh"): st.rerun()
     df = load_data()
     
     if not df.empty:
-        # --- TIKET MASUK ---
+        # --- 1. TIKET MASUK (WARNA-WARNI) ---
         st.subheader("📥 Tiket Masuk")
-        tiket_open = df[df['Status'] == 'OPEN']
-        if tiket_open.empty: st.info("Tidak ada tiket baru.")
+        
+        # Sortir: Emergency paling atas
+        prio_order = {"EMERGENCY": 0, "High (Urgent)": 1, "Normal": 2}
+        df['prio_sort'] = df['Prioritas'].map(prio_order).fillna(3)
+        tiket_open = df[df['Status'] == 'OPEN'].sort_values(by=['prio_sort', 'Waktu Lapor'])
+        
+        if tiket_open.empty:
+            st.info("Tidak ada tiket baru. Aman!")
         else:
             for i, row in tiket_open.iterrows():
-                with st.expander(f"📍 {row['Ruangan']} - {row['Nama Alat']}"):
-                    st.write(f"Keluhan: {row['Keluhan']}")
-                    nama = st.selectbox("Teknisi:", ["Budi", "Andi", "Siti"], key=f"s{row['ID Tiket']}")
-                    if st.button("AMBIL TUGAS", key=f"b{row['ID Tiket']}"):
-                        df.loc[df['ID Tiket']==row['ID Tiket'], 'Status']='ON PROGRESS'
-                        df.loc[df['ID Tiket']==row['ID Tiket'], 'Teknisi']=nama
-                        save_data(df)
-                        kirim_notifikasi_telegram(f"✅ {row['ID Tiket']} diambil oleh {nama}")
-                        st.rerun()
+                # --- LOGIKA WARNA DI SINI ---
+                with st.container(border=True):
+                    # Kita pakai kolom layout
+                    col_alert, col_info, col_action = st.columns([2, 3, 2])
+                    
+                    with col_alert:
+                        # Tampilkan Kotak Berwarna Sesuai Prioritas
+                        if row['Prioritas'] == 'EMERGENCY':
+                            st.error(f"🚨 {row['Ruangan']} (DARURAT!)")
+                        elif row['Prioritas'] == 'High (Urgent)':
+                            st.warning(f"⚡ {row['Ruangan']} (URGENT)")
+                        else:
+                            st.info(f"🟢 {row['Ruangan']} (NORMAL)")
+                        
+                        st.write(f"🛠 **{row['Nama Alat']}**")
+                        st.caption(f"ID: {row['ID Tiket']}")
+
+                    with col_info:
+                        st.write(f"📝 **Keluhan:** {row['Keluhan']}")
+                        st.write(f"👤 Pelapor: {row['Pelapor']}")
+                        st.write(f"🕒 Waktu: {row['Waktu Lapor']}")
+
+                    with col_action:
+                        st.write("---")
+                        nama = st.selectbox("Teknisi:", ["Budi", "Andi", "Siti"], key=f"s{row['ID Tiket']}")
+                        if st.button("🏃 AMBIL TUGAS", key=f"b{row['ID Tiket']}", type="primary"):
+                            df.loc[df['ID Tiket']==row['ID Tiket'], 'Status']='ON PROGRESS'
+                            df.loc[df['ID Tiket']==row['ID Tiket'], 'Teknisi']=nama
+                            save_data(df)
+                            kirim_notifikasi_telegram(f"✅ {row['ID Tiket']} diambil oleh {nama}")
+                            st.rerun()
 
         st.markdown("---")
         
-        # --- SEDANG DIKERJAKAN (BAGIAN PENTING) ---
+        # --- 2. SEDANG DIKERJAKAN (HEADER BERWARNA) ---
         st.subheader("🛠 Sedang Dikerjakan")
         tiket_prog = df[df['Status'] == 'ON PROGRESS']
         
-        for i, row in tiket_prog.iterrows():
-            with st.container(border=True):
-                st.info(f"🔧 **{row['ID Tiket']}** - {row['Nama Alat']} ({row['Ruangan']})")
-                
-                # Form Penyelesaian
-                catatan = st.text_area(f"Laporan Pengerjaan ({row['ID Tiket']}):", key=f"cat_{row['ID Tiket']}")
-                
-                c1, c2 = st.columns(2)
-                with c1:
-                    st.write("📸 **Foto Bukti (Opsional):**")
-                    foto = st.camera_input("Ambil Foto", key=f"cam_{row['ID Tiket']}")
-                    # Jika laptop tidak ada kamera, sediakan opsi upload
-                    if not foto:
-                        foto = st.file_uploader("Atau Upload Foto", type=['jpg','png'], key=f"up_{row['ID Tiket']}")
-                
-                with c2:
-                    st.write("✍️ **Tanda Tangan User (Wajib):**")
-                    # Kanvas Tanda Tangan
-                    ttd = st_canvas(
-                        fill_color="rgba(255, 165, 0, 0.3)",
-                        stroke_width=2,
-                        stroke_color="#000000",
-                        background_color="#eeeeee",
-                        height=150,
-                        width=300,
-                        drawing_mode="freedraw",
-                        key=f"canvas_{row['ID Tiket']}"
-                    )
-                
-                col_btn1, col_btn2 = st.columns(2)
-                with col_btn1:
-                    # TOMBOL SELESAI + DOWNLOAD PDF
-                    if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"done_{row['ID Tiket']}", type="primary"):
-                        if ttd.image_data is None:
-                            st.error("Mohon minta tanda tangan user dulu!")
-                        else:
-                            # 1. Update Database
-                            df.loc[df['ID Tiket']==row['ID Tiket'], 'Status']='DONE'
-                            df.loc[df['ID Tiket']==row['ID Tiket'], 'Catatan']=catatan
-                            save_data(df)
-                            
-                            # 2. Buat PDF
-                            pdf_bytes = create_pdf(row, foto, ttd.image_data, catatan)
-                            
-                            # 3. Notifikasi
-                            kirim_notifikasi_telegram(f"🎉 Tiket {row['ID Tiket']} SELESAI. Berita Acara telah dibuat.")
-                            st.success("Pekerjaan Selesai! Silakan download Berita Acara di bawah.")
-                            
-                            # 4. Munculkan Tombol Download PDF
-                            st.download_button(
-                                label="📄 DOWNLOAD PDF BERITA ACARA",
-                                data=pdf_bytes,
-                                file_name=f"Berita_Acara_{row['ID Tiket']}.pdf",
-                                mime='application/pdf'
-                            )
+        if tiket_prog.empty:
+            st.caption("Belum ada pekerjaan yang diambil.")
+        else:
+            for i, row in tiket_prog.iterrows():
+                with st.container(border=True):
+                    # Header berwarna juga saat dikerjakan biar sadar urgensinya
+                    if row['Prioritas'] == 'EMERGENCY':
+                        st.error(f"🔧 PENGERJAAN: {row['Nama Alat']} - {row['Ruangan']} (DARURAT)")
+                    elif row['Prioritas'] == 'High (Urgent)':
+                        st.warning(f"🔧 PENGERJAAN: {row['Nama Alat']} - {row['Ruangan']} (HIGH)")
+                    else:
+                        st.info(f"🔧 PENGERJAAN: {row['Nama Alat']} - {row['Ruangan']}")
+                    
+                    # Form Penyelesaian
+                    catatan = st.text_area(f"Laporan Pengerjaan ({row['ID Tiket']}):", key=f"cat_{row['ID Tiket']}")
+                    
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.write("📸 **Foto Bukti (Opsional):**")
+                        foto = st.camera_input("Ambil Foto", key=f"cam_{row['ID Tiket']}")
+                        if not foto:
+                            foto = st.file_uploader("Atau Upload Foto", type=['jpg','png'], key=f"up_{row['ID Tiket']}")
+                    
+                    with c2:
+                        st.write("✍️ **Tanda Tangan User (Wajib):**")
+                        ttd = st_canvas(
+                            fill_color="rgba(255, 165, 0, 0.3)",
+                            stroke_width=2,
+                            stroke_color="#000000",
+                            background_color="#eeeeee",
+                            height=150,
+                            width=300,
+                            drawing_mode="freedraw",
+                            key=f"canvas_{row['ID Tiket']}"
+                        )
+                    
+                    col_btn1, col_btn2 = st.columns(2)
+                    with col_btn1:
+                        if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"done_{row['ID Tiket']}", type="primary"):
+                            if ttd.image_data is None:
+                                st.error("Mohon minta tanda tangan user dulu!")
+                            else:
+                                df.loc[df['ID Tiket']==row['ID Tiket'], 'Status']='DONE'
+                                df.loc[df['ID Tiket']==row['ID Tiket'], 'Catatan']=catatan
+                                save_data(df)
+                                pdf_bytes = create_pdf(row, foto, ttd.image_data, catatan)
+                                kirim_notifikasi_telegram(f"🎉 Tiket {row['ID Tiket']} SELESAI. Berita Acara telah dibuat.")
+                                st.success("Pekerjaan Selesai! Silakan download Berita Acara di bawah.")
+                                st.download_button(
+                                    label="📄 DOWNLOAD PDF BERITA ACARA",
+                                    data=pdf_bytes,
+                                    file_name=f"Berita_Acara_{row['ID Tiket']}.pdf",
+                                    mime='application/pdf'
+                                )
 
 # ================= MENU 4: ADMIN DATABASE & REKAP =================
 elif menu == "🔐 Admin Database":
@@ -326,26 +340,20 @@ elif menu == "🔐 Admin Database":
     if password == PASSWORD_ADMIN:
         st.success("✅ Akses Diterima")
         
-        # Masukkan Link Google Sheet Anda di sini supaya Admin bisa klik
-        link_sheet = "https://docs.google.com/spreadsheets/d/...../edit" 
+        # LINK KE GOOGLE SHEET ASLI (Opsional, isi jika mau)
+        link_sheet = "https://docs.google.com/spreadsheets" 
         st.link_button("📂 Buka File Google Sheets Asli", link_sheet)
-        st.markdown("---")
-        # ------------------------------------------
-
+        
         df = load_data()
         
-        # --- TAB MENU DI DALAM ADMIN ---
         tab1, tab2 = st.tabs(["🗑️ Manajemen Data", "📅 Rekap & Export Excel"])
         
-        # === TAB 1: HAPUS DATA (YANG TADI) ===
         with tab1:
             st.subheader("📂 Semua Data Laporan (Real-time)")
             st.dataframe(df)
-            
             st.warning("⚠️ Hati-hati! Data yang dihapus tidak bisa kembali.")
             list_id = df['ID Tiket'].tolist()
             pilih_id = st.selectbox("Pilih ID Tiket untuk dihapus:", ["-"] + list_id)
-            
             if st.button("🗑️ HAPUS PERMANEN", type="primary"):
                 if pilih_id != "-":
                     df_baru = df[df['ID Tiket'] != pilih_id]
@@ -353,57 +361,28 @@ elif menu == "🔐 Admin Database":
                     st.success(f"✅ Data {pilih_id} berhasil dihapus dari Google Sheets!")
                     st.rerun()
 
-        # === TAB 2: FITUR REKAP TANGGAL (BARU!) ===
         with tab2:
             st.subheader("📅 Download Laporan per Periode")
-            st.write("Pilih rentang tanggal yang ingin direkap (Misal: 1 Bulan, 1 Minggu, atau Harian).")
-            
             col_date1, col_date2 = st.columns(2)
-            with col_date1:
-                tgl_mulai = st.date_input("Dari Tanggal:")
-            with col_date2:
-                tgl_akhir = st.date_input("Sampai Tanggal:")
+            with col_date1: tgl_mulai = st.date_input("Dari Tanggal:")
+            with col_date2: tgl_akhir = st.date_input("Sampai Tanggal:")
             
             if st.button("🔍 Tampilkan Data"):
-                # LOGIKA FILTER TANGGAL
-                # 1. Kita butuh kolom baru tipe 'DateTime' karena 'Waktu Lapor' di sheet itu String (Teks)
-                # Format di Excel kita: "2026-01-26 14:30" (YYYY-MM-DD HH:MM)
-                
                 try:
-                    # Copy dulu biar aman
                     df_filter = df.copy()
-                    
-                    # Ubah kolom string jadi datetime
                     df_filter['Tanggal_Saja'] = pd.to_datetime(df_filter['Waktu Lapor']).dt.date
-                    
-                    # Filter: Ambil yang >= tgl_mulai DAN <= tgl_akhir
                     mask = (df_filter['Tanggal_Saja'] >= tgl_mulai) & (df_filter['Tanggal_Saja'] <= tgl_akhir)
-                    df_hasil = df_filter.loc[mask]
-                    
-                    # Buang kolom bantuan tadi biar bersih saat didownload
-                    df_hasil = df_hasil.drop(columns=['Tanggal_Saja'])
+                    df_hasil = df_filter.loc[mask].drop(columns=['Tanggal_Saja'])
                     
                     if not df_hasil.empty:
-                        st.success(f"Ditemukan {len(df_hasil)} laporan dari {tgl_mulai} s/d {tgl_akhir}.")
+                        st.success(f"Ditemukan {len(df_hasil)} laporan.")
                         st.dataframe(df_hasil)
-                        
-                        # TOMBOL DOWNLOAD HASIL FILTER
-                        # Kita convert ke CSV agar ringan dan pasti bisa dibuka Excel
                         csv = df_hasil.to_csv(index=False).encode('utf-8')
-                        
-                        nama_file = f"Rekap_ATEM_{tgl_mulai}_sd_{tgl_akhir}.csv"
-                        
-                        st.download_button(
-                            label="📥 DOWNLOAD REKAP (Excel/CSV)",
-                            data=csv,
-                            file_name=nama_file,
-                            mime='text/csv',
-                        )
+                        st.download_button(label="📥 DOWNLOAD REKAP (CSV)", data=csv, file_name=f"Rekap_{tgl_mulai}_sd_{tgl_akhir}.csv", mime='text/csv')
                     else:
-                        st.warning("Tidak ada data laporan di rentang tanggal tersebut.")
-                        
+                        st.warning("Tidak ada data.")
                 except Exception as e:
-                    st.error(f"Gagal memproses tanggal: {e}. Pastikan format tanggal di Google Sheet benar (YYYY-MM-DD).")
+                    st.error(f"Error tanggal: {e}")
 
     elif password:
         st.error("❌ Password Salah!")
