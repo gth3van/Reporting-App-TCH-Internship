@@ -330,13 +330,15 @@ elif menu == "🔧 Dashboard Teknisi":
 
 # ================= MENU 4: ADMIN =================
 elif menu == "🔐 Admin":
-    st.title("🔐 Admin Database")
+    st.title("Admin SQL Database")
     
     # Password Protection
-    if st.text_input("Masukkan Password Admin:", type="password") == PASSWORD_ADMIN:
+    password = st.text_input("Masukkan Password Admin:", type="password")
+    
+    if password == PASSWORD_ADMIN:
         df = load_data()
         
-        # Tampilkan Data Tabel
+        # Tampilkan Statistik & Tabel
         st.write(f"Total Laporan: **{len(df)}**")
         st.dataframe(df, use_container_width=True)
         
@@ -345,49 +347,56 @@ elif menu == "🔐 Admin":
         # --- FITUR 1: HAPUS MASSAL (BULK DELETE) ---
         st.subheader("🗑️ Hapus Data Tertentu")
         
-        # Multiselect: Bisa pilih banyak ID sekaligus
-        pilih_hapus = st.multiselect(
-            "Pilih ID Tiket yang ingin dihapus (Bisa lebih dari satu):",
+        # Multiselect agar bisa hapus banyak sekaligus
+        to_del = st.multiselect(
+            "Pilih ID Tiket yang ingin dihapus:",
             options=df['ID Tiket'].tolist()
         )
         
-        # Tombol Eksekusi
-        if st.button(f"⚠️ Hapus {len(pilih_hapus)} Data Terpilih", type="primary"):
-            if pilih_hapus:
-                # Logika: Ambil data yang ID-nya TIDAK ADA di dalam daftar hapus
-                df_baru = df[~df['ID Tiket'].isin(pilih_hapus)]
+        if st.button(f"⚠️ Hapus {len(to_del)} Data Terpilih", type="primary"):
+            if to_del:
+                # Ambil data yang TIDAK dicentang (kebalikan)
+                df_baru = df[~df['ID Tiket'].isin(to_del)]
                 save_data(df_baru)
-                st.success(f"Berhasil menghapus {len(pilih_hapus)} data!")
+                st.success(f"Berhasil menghapus {len(to_del)} data!")
                 st.rerun()
             else:
                 st.warning("Pilih dulu data yang mau dihapus.")
 
         st.divider()
 
-        # --- FITUR 2: RESET TOTAL & BACKUP ---
+        # --- FITUR 2: RESET DATABASE TOTAL (PERBAIKAN ERROR) ---
         c1, c2 = st.columns(2)
         
         with c1:
             st.subheader("🔥 Reset Database")
             if st.button("HAPUS SEMUA DATA (RESET)", type="primary"):
-                # Konfirmasi sederhana agar tidak kepencet
-                conn.query("DROP TABLE IF EXISTS laporan;") # Hapus tabel di Neon
-                init_db() # Bikin tabel baru kosong
-                load_data.clear() # Bersihkan cache
-                st.error("Database telah dikosongkan total!")
-                st.rerun()
+                try:
+                    # 👇 PERBAIKAN DISINI: Pakai session, bukan conn.query
+                    with conn.session as s:
+                        s.execute(text("DROP TABLE IF EXISTS laporan;"))
+                        s.commit()
+                    
+                    init_db()         # Bikin tabel kosong baru
+                    load_data.clear() # Bersihkan cache memori
+                    
+                    st.error("Database telah dikosongkan total!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal reset: {e}")
                 
         with c2:
             st.subheader("📥 Backup Data")
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label="Download Excel/CSV Lengkap",
-                data=csv,
-                file_name=f"Backup_ATEM_{datetime.now().strftime('%Y%m%d')}.csv",
-                mime='text/csv'
+                label="Download Excel/CSV Lengkap", 
+                data=csv, 
+                file_name="Backup_ATEM.csv", 
+                mime="text/csv"
             )
             
-    else:
-        st.info("Masukkan password untuk mengakses menu ini.")
+    elif password:
+        st.error("Password Salah!")
+
 
 
