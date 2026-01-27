@@ -2,6 +2,7 @@ streamlit
 pandas
 openpyxl
 requests
-st-gsheets-connection
 fpdf
 streamlit-drawable-canvas
+psycopg2-binary
+sqlalchemy
