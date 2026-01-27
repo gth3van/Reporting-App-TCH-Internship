@@ -8,15 +8,16 @@ from streamlit_drawable_canvas import st_canvas
 import tempfile
 import numpy as np
 from PIL import Image
+import base64 # 👈 NEW: For saving PDF to Database
 
 # ==========================================
-# ⚙️ KONFIGURASI TELEGRAM & ADMIN
+# ⚙️ TELEGRAM & ADMIN CONFIGURATION
 # ==========================================
 BOT_TOKEN = "8433442999:AAGjTv0iZEm_xtvlQTUBT11PUyxUYMtGxFQ"
 CHAT_ID = "-1003692690153"
 PASSWORD_ADMIN = "admin123"
 
-# --- FUNGSI KIRIM PESAN ---
+# --- SEND MESSAGE FUNCTION ---
 def kirim_notifikasi_telegram(pesan):
     try:
         if "GANTI" in BOT_TOKEN: return False
@@ -26,7 +27,7 @@ def kirim_notifikasi_telegram(pesan):
         return True
     except: return False
 
-# --- FUNGSI BIKIN PDF (2 TANDA TANGAN: TEKNISI & USER) ---
+# --- PDF GENERATION FUNCTION (2 SIGNATURES) ---
 def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
     pdf = FPDF()
     pdf.add_page()
@@ -39,7 +40,7 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
     pdf.cell(0, 10, "RS CINTA KASIH TZU CHI - DEPARTEMEN ATEM", ln=True, align='C')
     pdf.line(10, 30, 200, 30); pdf.ln(10)
     
-    # --- ISI LAPORAN ---
+    # --- REPORT CONTENT ---
     pdf.set_font("Times", '', 12)
     fields = [
         f"No. Tiket: {ticket_data['ID Tiket']}",
@@ -60,13 +61,12 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
     pdf.multi_cell(0, 8, f"Teknisi: {ticket_data['Teknisi']}\nSolusi: {catatan_teknisi}")
     pdf.ln(10)
     
-    # --- AREA TANDA TANGAN (SIDE BY SIDE) ---
-    # Cek sisa halaman
+    # --- SIGNATURE AREA (SIDE BY SIDE) ---
     if pdf.get_y() > 200: pdf.add_page()
     
-    y_start = pdf.get_y() # Simpan posisi Y awal biar sejajar
+    y_start = pdf.get_y()
     
-    # 1. POSISI KIRI: TEKNISI
+    # 1. LEFT: TECHNICIAN
     pdf.set_xy(10, y_start)
     pdf.set_font("Times", '', 10)
     pdf.cell(80, 5, "Dikerjakan Oleh / Teknisi,", ln=True, align='C')
@@ -78,12 +78,11 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
             im.save(tmp_t.name)
             pdf.image(tmp_t.name, x=30, y=y_start+5, w=40)
             
-    # Nama Teknisi (di bawah TTD)
     pdf.set_xy(10, y_start+35)
     pdf.set_font("Times", 'B', 10)
     pdf.cell(80, 5, f"({ticket_data['Teknisi']})", ln=True, align='C')
 
-    # 2. POSISI KANAN: USER
+    # 2. RIGHT: USER
     pdf.set_xy(110, y_start)
     pdf.set_font("Times", '', 10)
     pdf.cell(80, 5, "Mengetahui / User,", ln=True, align='C')
@@ -95,12 +94,11 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
             im.save(tmp_u.name)
             pdf.image(tmp_u.name, x=130, y=y_start+5, w=40)
             
-    # Nama User (di bawah TTD)
     pdf.set_xy(110, y_start+35)
     pdf.set_font("Times", 'B', 10)
     pdf.cell(80, 5, f"({ticket_data['Pelapor']})", ln=True, align='C')
 
-    # --- LAMPIRAN FOTO ---
+    # --- PHOTO ATTACHMENT ---
     if image_file:
         pdf.add_page()
         pdf.set_font("Times", 'B', 14)
@@ -111,7 +109,7 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
 
     return pdf.output(dest="S").encode("latin1")
 
-# --- KONFIGURASI HALAMAN ---
+# --- PAGE CONFIG ---
 st.set_page_config(page_title="Tzu Chi MedFix", page_icon="🏥", layout="wide")
 st.markdown("""
 <style>
@@ -124,13 +122,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🚀 KONEKSI DATABASE POSTGRESQL (NEON)
+# 🚀 POSTGRESQL DATABASE CONNECTION (NEON)
 # ==========================================
-# Koneksi tipe SQL (bukan GSheets lagi)
 conn = st.connection("postgresql", type="sql")
 
 def init_db():
-    # membuat Tabel otomatis di Neon
     with conn.session as s:
         s.execute(text("""
             CREATE TABLE IF NOT EXISTS laporan (
@@ -144,46 +140,35 @@ def init_db():
                 "Prioritas" TEXT,
                 "Status" TEXT,
                 "Teknisi" TEXT,
-                "Catatan" TEXT
+                "Catatan" TEXT,
+                "PDF_File" TEXT  -- New column for storing PDF
             );
         """))
         s.commit()
 
-# Panggil fungsi init sekali di awal
 init_db()
 
-# --- FUNGSI LOAD & SAVE YANG SUDAH DI-OPTIMALKAN (ANTI LEMOT) ---
+# --- OPTIMIZED LOAD & SAVE FUNCTIONS ---
 
-@st.cache_data(ttl=10) # 👈 KUNCI RAHASIANYA DISINI
+@st.cache_data(ttl=10)
 def load_data():
-    """
-    Mengambil data dari SQL Neon.
-    ttl=10 artinya: Data disimpan di RAM laptop selama 10 detik.
-    Jika kamu refresh dalam waktu < 10 detik, dia baca RAM (Instan/Cepat).
-    Jika sudah > 10 detik, baru dia download lagi dari Neon.
-    """
     try:
-        # Kita hapus ttl=0 di dalam query, biarkan decorator @st.cache_data yang mengatur
-        df = conn.query('SELECT * FROM laporan;') 
+        df = conn.query('SELECT * FROM laporan;')
+        # Check if PDF_File column exists, if not, handle it gracefully
+        if 'PDF_File' not in df.columns:
+             df['PDF_File'] = None
         return df
     except Exception as e:
-        # Return dataframe kosong tapi berkolom lengkap biar tidak error
         return pd.DataFrame(columns=[
             "ID Tiket","Waktu Lapor","Pelapor","Ruangan","Nama Alat",
-            "Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan"
+            "Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan","PDF_File"
         ])
 
 def save_data(df):
-    """
-    Menyimpan data ke SQL Neon dan MEMBERSIHKAN MEMORI.
-    """
     try:
-        # Simpan ke Neon (Agak butuh waktu 1-2 detik, wajar)
         df.to_sql('laporan', conn.engine, if_exists='replace', index=False)
-        
-        # 👈 PENTING: Hapus ingatan lama biar data baru langsung muncul
+        # 👈 CRITICAL: Clear cache so new data appears immediately
         load_data.clear() 
-        
     except Exception as e:
         st.error(f"Gagal menyimpan: {e}")
         
@@ -202,8 +187,7 @@ if menu == "📝 Buat Laporan":
                 df = load_data()
                 new_id = f"URGENT-{len(df)+1:03d}"
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_row = {"ID Tiket": new_id, "Waktu Lapor": now, "Pelapor": "DARURAT", "Ruangan": loc, "Nama Alat": "DARURAT", "Nomor Serial": "-", "Keluhan": "DARURAT", "Prioritas": "EMERGENCY", "Status": "OPEN", "Teknisi": "-", "Catatan": "-"}
-                # Cara nambah data di Pandas:
+                new_row = {"ID Tiket": new_id, "Waktu Lapor": now, "Pelapor": "DARURAT", "Ruangan": loc, "Nama Alat": "DARURAT", "Nomor Serial": "-", "Keluhan": "DARURAT", "Prioritas": "EMERGENCY", "Status": "OPEN", "Teknisi": "-", "Catatan": "-", "PDF_File": None}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
                 kirim_notifikasi_telegram(f"🚨 *SOS!* {loc}\nID: {new_id}")
@@ -219,19 +203,27 @@ if menu == "📝 Buat Laporan":
                 df = load_data()
                 new_id = f"TC-{len(df)+1:03d}"
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
-                new_row = {"ID Tiket": new_id, "Waktu Lapor": now, "Pelapor": pelapor, "Ruangan": loc, "Nama Alat": alat, "Nomor Serial": sn if sn else "-", "Keluhan": kel, "Prioritas": prio, "Status": "OPEN", "Teknisi": "-", "Catatan": "-"}
+                new_row = {"ID Tiket": new_id, "Waktu Lapor": now, "Pelapor": pelapor, "Ruangan": loc, "Nama Alat": alat, "Nomor Serial": sn if sn else "-", "Keluhan": kel, "Prioritas": prio, "Status": "OPEN", "Teknisi": "-", "Catatan": "-", "PDF_File": None}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
                 kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat}\n⚠️ {prio}\n *Keluhan/Kronologi: * {kel}")
                 st.success(f"Terkirim! ID: {new_id}")
 
-# ================= MENU 2: STATUS =================
+# ================= MENU 2: STATUS & DOWNLOAD PDF =================
 elif menu == "🔍 Cek Status Laporan":
     st.title("🔍 Status Laporan")
     if st.button("Refresh"): st.rerun()
     df = load_data()
     if not df.empty:
         df = df[df['Status'] != 'DONE'].sort_values(by='Waktu Lapor', ascending=False)
+        # Show DONE tickets separately if you want, or just filter out DONE
+        # Here we show active tickets, maybe you want to see DONE tickets to download PDF?
+        # Let's show ALL tickets but sort Active first
+        
+        # Sort: Active first, then Done
+        df['sort_val'] = df['Status'].apply(lambda x: 1 if x == 'DONE' else 0)
+        df = df.sort_values(by=['sort_val', 'Waktu Lapor'], ascending=[True, False])
+        
         for i, r in df.iterrows():
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1,3,2])
@@ -239,11 +231,23 @@ elif menu == "🔍 Cek Status Laporan":
                     if r['Prioritas']=='EMERGENCY': st.error("🚨 SOS")
                     elif r['Prioritas']=='High (Urgent)': st.warning("⚡ HIGH")
                     else: st.info("🟢 NORMAL")
-                with c2: st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}"); st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
+                with c2: 
+                    st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}")
+                    st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
                 with c3: 
                     if r['Status']=='OPEN': st.write("⏳ Menunggu Teknisi")
-                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} Menuju Lokasi</div>', unsafe_allow_html=True)
+                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} OTW</div>', unsafe_allow_html=True)
                     elif r['Status']=='PENDING': st.markdown(f'<div class="status-pending">⏳ PENDING</div>', unsafe_allow_html=True)
+                    elif r['Status']=='DONE':
+                        st.success("✅ SELESAI")
+                        # DOWNLOAD BUTTON FOR PDF
+                        if r['PDF_File'] and r['PDF_File'] != "None" and pd.notna(r['PDF_File']):
+                            try:
+                                b64_pdf = r['PDF_File']
+                                pdf_bytes = base64.b64decode(b64_pdf)
+                                st.download_button("📄 Unduh BA", pdf_bytes, f"BA_{r['ID Tiket']}.pdf", "application/pdf", key=f"dl_{r['ID Tiket']}")
+                            except:
+                                st.caption("PDF Error")
 
 # ================= MENU 3: TEKNISI =================
 elif menu == "🔧 Dashboard Teknisi":
@@ -253,7 +257,7 @@ elif menu == "🔧 Dashboard Teknisi":
     df = load_data()
     if not df.empty:
         # -------------------------------------------
-        # BAGIAN 1: TIKET MASUK (Hanya tombol Ambil)
+        # PART 1: INCOMING TICKETS (Pick up button only)
         # -------------------------------------------
         st.subheader("📥 Tiket Masuk")
         prio_map = {"EMERGENCY":0, "High (Urgent)":1, "Normal":2}
@@ -265,20 +269,19 @@ elif menu == "🔧 Dashboard Teknisi":
         else:
             for i, r in open_t.iterrows():
                 with st.container(border=True):
-                    # Kolom Layout
                     c1, c2, c3 = st.columns([2,3,2])
                     
-                    with c1: # Info Prioritas & Lokasi
+                    with c1: # Priority & Location
                         if r['Prioritas']=='EMERGENCY': st.error(f"🚨 {r['Ruangan']}")
                         elif r['Prioritas']=='High (Urgent)': st.warning(f"⚡ {r['Ruangan']}")
                         else: st.info(f"🟢 {r['Ruangan']}")
                         st.caption(f"Alat: {r['Nama Alat']}")
                     
-                    with c2: # Info Keluhan
+                    with c2: # Complaints
                         st.write(f"📝 **Keluhan:** {r['Keluhan']}")
                         st.caption(f"Pelapor: {r['Pelapor']}")
                     
-                    with c3: # Tombol Ambil
+                    with c3: # Pickup Action
                         tek = st.selectbox("Pilih Teknisi", ["Budi","Andi","Siti"], key=f"s{r['ID Tiket']}")
                         if st.button("AMBIL TUGAS", key=f"b{r['ID Tiket']}", type="primary"):
                             df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='ON PROGRESS'
@@ -290,7 +293,7 @@ elif menu == "🔧 Dashboard Teknisi":
         st.markdown("---")
         
         # -------------------------------------------
-        # BAGIAN 2: SEDANG DIKERJAKAN (Ada Tanda Tangan)
+        # PART 2: IN PROGRESS (With Signatures & PDF Save)
         # -------------------------------------------
         st.subheader("🛠 Sedang Dikerjakan")
         prog_t = df[df['Status']=='ON PROGRESS']
@@ -300,19 +303,19 @@ elif menu == "🔧 Dashboard Teknisi":
         else:
             for i, r in prog_t.iterrows():
                 with st.container(border=True):
-                    # Header Status Berwarna
+                    # Colored Header
                     if r['Prioritas']=='EMERGENCY': st.error(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
                     elif r['Prioritas']=='High (Urgent)': st.warning(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']} (HIGH)")
                     else: st.info(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']}")
                     
-                    # Form Input Laporan
+                    # Form Input
                     cat = st.text_area(f"Laporan Pengerjaan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                     cam = st.camera_input("Foto Bukti (Opsional)", key=f"f{r['ID Tiket']}")
                     
                     st.write("---")
                     st.write("✍️ **Tanda Tangan Digital:**")
                     
-                    # Layout 2 Kolom Tanda Tangan (Kiri Teknisi, Kanan User)
+                    # 2 Columns for Signatures
                     col_ttd1, col_ttd2 = st.columns(2)
                     
                     with col_ttd1:
@@ -337,30 +340,32 @@ elif menu == "🔧 Dashboard Teknisi":
                             key=f"ttd_user_{r['ID Tiket']}"
                         )
 
-                    # Tombol Selesai & Validasi
+                    # Finish Button
                     if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"d{r['ID Tiket']}", type="primary"):
-                        # Validasi: Kedua TTD harus diisi (tidak boleh kosong)
                         if ttd_tek.image_data is None or ttd_user.image_data is None:
                             st.error("⚠️ Harap lengkapi kedua Tanda Tangan (Teknisi & User)!")
                         else:
-                            # 1. Update Database
-                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
-                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
-                            save_data(df)
-                            
-                            # 2. Generate PDF (Oper 2 gambar TTD)
-                            # Pastikan fungsi create_pdf di atas sudah menerima 2 parameter TTD
+                            # 1. Generate PDF First
                             pdf_bytes = create_pdf(r, cam, ttd_user.image_data, ttd_tek.image_data, cat)
                             
-                            # 3. Notifikasi & Download
+                            # 2. Convert PDF to Base64 (Text) for Database
+                            pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+                            
+                            # 3. Update DataFrame
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'PDF_File']=pdf_b64
+                            
+                            # 4. Save to DB (And Clear Cache)
+                            save_data(df)
+                            
+                            # 5. Notify & Provide Download
                             kirim_notifikasi_telegram(f"🎉 Tiket {r['ID Tiket']} SELESAI ({r['Teknisi']}).")
-                            st.success("Berita Acara Siap!")
-                            st.download_button(
-                                label="📥 Unduh PDF Resmi",
-                                data=pdf_bytes,
-                                file_name=f"BA_{r['ID Tiket']}.pdf",
-                                mime='application/pdf'
-                            )
+                            st.success("Berita Acara Tersimpan di Database!")
+                            st.download_button("📥 Unduh PDF Resmi", pdf_bytes, f"BA_{r['ID Tiket']}.pdf", "application/pdf")
+                            
+                            # 6. Refresh to remove finished task
+                            st.rerun()
 
 # ================= MENU 4: ADMIN =================
 elif menu == "🔐 Admin":
@@ -383,20 +388,3 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
