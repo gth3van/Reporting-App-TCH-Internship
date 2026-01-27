@@ -298,9 +298,9 @@ elif menu == "🔧 Dashboard Teknisi":
                             key=f"ttd_user_{r['ID Tiket']}"
                         )
 
-                # Tombol Selesai
-                if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"d{r['ID Tiket']}", type="primary"):
-                    # Validasi: Kedua TTD harus diisi
+                    # Tombol Selesai
+                    if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"d{r['ID Tiket']}", type="primary"):
+                     # Validasi: Kedua TTD harus diisi
                     if ttd_tek.image_data is None or ttd_user.image_data is None:
                         st.error("⚠️ Harap lengkapi kedua Tanda Tangan (Teknisi & User)!")
                     else:
@@ -376,6 +376,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
