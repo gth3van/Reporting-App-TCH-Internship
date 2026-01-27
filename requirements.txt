@@ -6,3 +6,5 @@ fpdf
 streamlit-drawable-canvas
 psycopg2-binary
 sqlalchemy
+pillow
+numpy
