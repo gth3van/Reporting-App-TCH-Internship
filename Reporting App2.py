@@ -249,44 +249,83 @@ elif menu == "🔍 Cek Status Laporan":
 elif menu == "🔧 Dashboard Teknisi":
     st.title("🔧 Dashboard ATEM")
     if st.button("🔄 Refresh Data"): st.rerun()
+    
     df = load_data()
     if not df.empty:
-        # TIKET MASUK
+        # -------------------------------------------
+        # BAGIAN 1: TIKET MASUK (Hanya tombol Ambil)
+        # -------------------------------------------
         st.subheader("📥 Tiket Masuk")
         prio_map = {"EMERGENCY":0, "High (Urgent)":1, "Normal":2}
         df['sort'] = df['Prioritas'].map(prio_map)
         open_t = df[df['Status']=='OPEN'].sort_values('sort')
         
-        if open_t.empty: st.info("Tidak ada tiket baru.")
+        if open_t.empty: 
+            st.info("Tidak ada tiket baru.")
         else:
-             for i, r in prog_t.iterrows():
-                 with st.container(border=True):
-                     # Header Status
-                    if r['Prioritas']=='EMERGENCY': st.error(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
-                    elif r['Prioritas']=='High (Urgent)': st.warning(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (HIGH)")
-                    else: st.info(f"🔧 {r['ID Tiket']} - {r['Nama Alat']}")
-                
-                      # Form Input
+            for i, r in open_t.iterrows():
+                with st.container(border=True):
+                    # Kolom Layout
+                    c1, c2, c3 = st.columns([2,3,2])
+                    
+                    with c1: # Info Prioritas & Lokasi
+                        if r['Prioritas']=='EMERGENCY': st.error(f"🚨 {r['Ruangan']}")
+                        elif r['Prioritas']=='High (Urgent)': st.warning(f"⚡ {r['Ruangan']}")
+                        else: st.info(f"🟢 {r['Ruangan']}")
+                        st.caption(f"Alat: {r['Nama Alat']}")
+                    
+                    with c2: # Info Keluhan
+                        st.write(f"📝 **Keluhan:** {r['Keluhan']}")
+                        st.caption(f"Pelapor: {r['Pelapor']}")
+                    
+                    with c3: # Tombol Ambil
+                        tek = st.selectbox("Pilih Teknisi", ["Budi","Andi","Siti"], key=f"s{r['ID Tiket']}")
+                        if st.button("AMBIL TUGAS", key=f"b{r['ID Tiket']}", type="primary"):
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='ON PROGRESS'
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Teknisi']=tek
+                            save_data(df)
+                            kirim_notifikasi_telegram(f"✅ Tiket {r['ID Tiket']} diambil oleh {tek}")
+                            st.rerun()
+
+        st.markdown("---")
+        
+        # -------------------------------------------
+        # BAGIAN 2: SEDANG DIKERJAKAN (Ada Tanda Tangan)
+        # -------------------------------------------
+        st.subheader("🛠 Sedang Dikerjakan")
+        prog_t = df[df['Status']=='ON PROGRESS']
+        
+        if prog_t.empty:
+            st.caption("Belum ada pekerjaan yang diambil.")
+        else:
+            for i, r in prog_t.iterrows():
+                with st.container(border=True):
+                    # Header Status Berwarna
+                    if r['Prioritas']=='EMERGENCY': st.error(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
+                    elif r['Prioritas']=='High (Urgent)': st.warning(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']} (HIGH)")
+                    else: st.info(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']}")
+                    
+                    # Form Input Laporan
                     cat = st.text_area(f"Laporan Pengerjaan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                     cam = st.camera_input("Foto Bukti (Opsional)", key=f"f{r['ID Tiket']}")
-                
+                    
                     st.write("---")
                     st.write("✍️ **Tanda Tangan Digital:**")
-                
-                    # Layout 2 Kolom untuk TTD
+                    
+                    # Layout 2 Kolom Tanda Tangan (Kiri Teknisi, Kanan User)
                     col_ttd1, col_ttd2 = st.columns(2)
-                
+                    
                     with col_ttd1:
                         st.caption(f"Teknisi: {r['Teknisi']}")
                         ttd_tek = st_canvas(
                             fill_color="rgba(255, 165, 0, 0.3)",
                             stroke_width=2, stroke_color="#000000",
                             background_color="#eeeeee",
-                            height=150, width=250, # Ukuran disesuaikan
+                            height=150, width=250,
                             drawing_mode="freedraw",
                             key=f"ttd_tek_{r['ID Tiket']}"
                         )
-                            
+                        
                     with col_ttd2:
                         st.caption(f"User: {r['Pelapor']}")
                         ttd_user = st_canvas(
@@ -298,62 +337,30 @@ elif menu == "🔧 Dashboard Teknisi":
                             key=f"ttd_user_{r['ID Tiket']}"
                         )
 
-                    # Tombol Selesai
+                    # Tombol Selesai & Validasi
                     if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"d{r['ID Tiket']}", type="primary"):
-                     # Validasi: Kedua TTD harus diisi
-                    if ttd_tek.image_data is None or ttd_user.image_data is None:
-                        st.error("⚠️ Harap lengkapi kedua Tanda Tangan (Teknisi & User)!")
-                    else:
-                        # 1. Update Database
-                        df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
-                        df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
-                        save_data(df)
-                        
-                        # 2. Generate PDF (Kirim 2 TTD)
-                        pdf_bytes = create_pdf(r, cam, ttd_user.image_data, ttd_tek.image_data, cat)
-                        
-                        # 3. Notifikasi & Download
-                        kirim_notifikasi_telegram(f"🎉 Tiket {r['ID Tiket']} SELESAI ({r['Teknisi']}).")
-                        st.success("Berita Acara Siap!")
-                        st.download_button(
-                            label="📥 Unduh PDF Resmi",
-                            data=pdf_bytes,
-                            file_name=f"BA_{r['ID Tiket']}.pdf",
-                            mime='application/pdf'
-                        )
-        
-        st.markdown("---")
-        # SEDANG DIKERJAKAN
-        st.subheader("🛠 Sedang Dikerjakan")
-        prog_t = df[df['Status']=='ON PROGRESS']
-        for i, r in prog_t.iterrows():
-            with st.container(border=True):
-                st.info(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} ({r['Ruangan']})")
-                cat = st.text_area(f"Laporan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
-                c1, c2 = st.columns(2)
-                with c1: cam = st.camera_input("Foto", key=f"f{r['ID Tiket']}")
-                with c2: st.write("TTD User:"); ttd = st_canvas(
-                    fill_color="rgba(255, 165, 0, 0.3)",
-                    stroke_width=2,      # <--- INI KUNCINYA! (2 = Tipis seperti Pulpen)
-                    stroke_color="#000000",
-                    background_color="#FFFFFF",
-                    height=150,
-                    width=300,
-                    drawing_mode="freedraw",
-                    key=f"canvas_{r['ID Tiket']}" # Pastikan key-nya sesuai variabel di loopingmu
-                )
-                
-
-                if st.button("✅ SELESAI", key=f"d{r['ID Tiket']}", type="primary"):
-                    if ttd.image_data is None: st.error("Butuh TTD!")
-                    else:
-                        df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
-                        df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
-                        save_data(df)
-                        pdf = create_pdf(r, cam, ttd.image_data, cat)
-                        kirim_notifikasi_telegram(f"🎉 {r['ID Tiket']} SELESAI.")
-                        st.download_button("📥 Unduh Berita Acara", pdf, f"BA_{r['ID Tiket']}.pdf")
-                        st.success("Selesai!")
+                        # Validasi: Kedua TTD harus diisi (tidak boleh kosong)
+                        if ttd_tek.image_data is None or ttd_user.image_data is None:
+                            st.error("⚠️ Harap lengkapi kedua Tanda Tangan (Teknisi & User)!")
+                        else:
+                            # 1. Update Database
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
+                            df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
+                            save_data(df)
+                            
+                            # 2. Generate PDF (Oper 2 gambar TTD)
+                            # Pastikan fungsi create_pdf di atas sudah menerima 2 parameter TTD
+                            pdf_bytes = create_pdf(r, cam, ttd_user.image_data, ttd_tek.image_data, cat)
+                            
+                            # 3. Notifikasi & Download
+                            kirim_notifikasi_telegram(f"🎉 Tiket {r['ID Tiket']} SELESAI ({r['Teknisi']}).")
+                            st.success("Berita Acara Siap!")
+                            st.download_button(
+                                label="📥 Unduh PDF Resmi",
+                                data=pdf_bytes,
+                                file_name=f"BA_{r['ID Tiket']}.pdf",
+                                mime='application/pdf'
+                            )
 
 # ================= MENU 4: ADMIN =================
 elif menu == "🔐 Admin":
@@ -376,6 +383,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
