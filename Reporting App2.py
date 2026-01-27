@@ -320,7 +320,7 @@ elif menu == "🔧 Dashboard Teknisi":
                         ttd_tek = st_canvas(
                             fill_color="rgba(255, 165, 0, 0.3)",
                             stroke_width=2, stroke_color="#000000",
-                            background_color="#eeeeee",
+                            background_color="#FFFFFF",
                             height=150, width=250,
                             drawing_mode="freedraw",
                             key=f"ttd_tek_{r['ID Tiket']}"
@@ -331,7 +331,7 @@ elif menu == "🔧 Dashboard Teknisi":
                         ttd_user = st_canvas(
                             fill_color="rgba(255, 165, 0, 0.3)",
                             stroke_width=2, stroke_color="#000000",
-                            background_color="#eeeeee",
+                            background_color="#FFFFFF",
                             height=150, width=250,
                             drawing_mode="freedraw",
                             key=f"ttd_user_{r['ID Tiket']}"
@@ -383,6 +383,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
