@@ -128,7 +128,7 @@ def save_data(df):
 
 # --- SIDEBAR ---
 st.sidebar.title("🏥 Navigasi")
-menu = st.sidebar.radio("Menu", ["📝 Buat Laporan", "🔍 Cek Status", "🔧 Dashboard Teknisi", "🔐 Admin"])
+menu = st.sidebar.radio("Menu", ["📝 Buat Laporan", "🔍 Cek Status Laporan", "🔧 Dashboard Teknisi", "🔐 Admin"])
 
 # ================= MENU 1: LAPOR =================
 if menu == "📝 Buat Laporan":
@@ -260,5 +260,6 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
