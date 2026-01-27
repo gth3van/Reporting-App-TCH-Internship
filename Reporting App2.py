@@ -113,19 +113,41 @@ def init_db():
 # Panggil fungsi init sekali di awal
 init_db()
 
+# --- FUNGSI LOAD & SAVE YANG SUDAH DI-OPTIMALKAN (ANTI LEMOT) ---
+
+@st.cache_data(ttl=10) # 👈 KUNCI RAHASIANYA DISINI
 def load_data():
-    # Ambil semua data dari SQL. ttl=0 aman di SQL karena servernya kuat.
+    """
+    Mengambil data dari SQL Neon.
+    ttl=10 artinya: Data disimpan di RAM laptop selama 10 detik.
+    Jika kamu refresh dalam waktu < 10 detik, dia baca RAM (Instan/Cepat).
+    Jika sudah > 10 detik, baru dia download lagi dari Neon.
+    """
     try:
-        df = conn.query('SELECT * FROM laporan;', ttl=0)
+        # Kita hapus ttl=0 di dalam query, biarkan decorator @st.cache_data yang mengatur
+        df = conn.query('SELECT * FROM laporan;') 
         return df
-    except:
-        return pd.DataFrame(columns=["ID Tiket","Waktu Lapor","Pelapor","Ruangan","Nama Alat","Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan"])
+    except Exception as e:
+        # Return dataframe kosong tapi berkolom lengkap biar tidak error
+        return pd.DataFrame(columns=[
+            "ID Tiket","Waktu Lapor","Pelapor","Ruangan","Nama Alat",
+            "Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan"
+        ])
 
 def save_data(df):
-    # Simpan data ke SQL dengan cara "Timpa Tabel Lama" (Simplest way for intern project)
-    # if_exists='replace' artinya tabel lama dihapus, diganti data baru dari 'df'
-    df.to_sql('laporan', conn.engine, if_exists='replace', index=False)
-
+    """
+    Menyimpan data ke SQL Neon dan MEMBERSIHKAN MEMORI.
+    """
+    try:
+        # Simpan ke Neon (Agak butuh waktu 1-2 detik, wajar)
+        df.to_sql('laporan', conn.engine, if_exists='replace', index=False)
+        
+        # 👈 PENTING: Hapus ingatan lama biar data baru langsung muncul
+        load_data.clear() 
+        
+    except Exception as e:
+        st.error(f"Gagal menyimpan: {e}")
+        
 # --- SIDEBAR ---
 st.sidebar.title("🏥 Navigasi")
 menu = st.sidebar.radio("Menu", ["📝 Buat Laporan", "🔍 Cek Status Laporan", "🔧 Dashboard Teknisi", "🔐 Admin"])
@@ -260,6 +282,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
