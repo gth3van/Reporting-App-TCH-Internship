@@ -26,8 +26,8 @@ def kirim_notifikasi_telegram(pesan):
         return True
     except: return False
 
-# --- FUNGSI BIKIN PDF (LAYOUT RAPI: TTD KANAN, FOTO LAMPIRAN) ---
-def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
+# --- FUNGSI BIKIN PDF (2 TANDA TANGAN: TEKNISI & USER) ---
+def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
     pdf = FPDF()
     pdf.add_page()
     
@@ -58,38 +58,55 @@ def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
     pdf.set_font("Times", 'B', 12); pdf.cell(0, 10, "TINDAKAN TEKNISI", ln=True)
     pdf.set_font("Times", '', 12)
     pdf.multi_cell(0, 8, f"Teknisi: {ticket_data['Teknisi']}\nSolusi: {catatan_teknisi}")
-    pdf.ln(10) # Jarak sebelum tanda tangan
+    pdf.ln(10)
     
-    # --- TANDA TANGAN (POSISI DI KANAN BAWAH HALAMAN 1) ---
-    if signature_img is not None:
-        # Cek sisa halaman, kalau tidak cukup buat halaman baru
-        if pdf.get_y() > 220: pdf.add_page()
-        
-        # Simpan posisi Y sekarang
-        y_pos = pdf.get_y()
-        
-        # Geser ke Kanan (X = 120) untuk tulisan "Mengetahui,"
-        pdf.set_xy(120, y_pos)
-        pdf.set_font("Times", '', 10)
-        pdf.cell(50, 5, "Mengetahui / User,", ln=True, align='C')
-        
-        # Proses Gambar TTD
-        img_data = signature_img.astype(np.uint8)
+    # --- AREA TANDA TANGAN (SIDE BY SIDE) ---
+    # Cek sisa halaman
+    if pdf.get_y() > 200: pdf.add_page()
+    
+    y_start = pdf.get_y() # Simpan posisi Y awal biar sejajar
+    
+    # 1. POSISI KIRI: TEKNISI
+    pdf.set_xy(10, y_start)
+    pdf.set_font("Times", '', 10)
+    pdf.cell(80, 5, "Dikerjakan Oleh / Teknisi,", ln=True, align='C')
+    
+    if tech_sig is not None:
+        img_data = tech_sig.astype(np.uint8)
         im = Image.fromarray(img_data)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_sig:
-            im.save(tmp_sig.name)
-            # Tempel gambar di bawah tulisan (X=125 biar center di kanan)
-            pdf.image(tmp_sig.name, x=125, y=pdf.get_y(), w=40)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_t:
+            im.save(tmp_t.name)
+            pdf.image(tmp_t.name, x=30, y=y_start+5, w=40)
             
-    # --- FOTO BUKTI (DI HALAMAN BARU SEBAGAI LAMPIRAN) ---
+    # Nama Teknisi (di bawah TTD)
+    pdf.set_xy(10, y_start+35)
+    pdf.set_font("Times", 'B', 10)
+    pdf.cell(80, 5, f"({ticket_data['Teknisi']})", ln=True, align='C')
+
+    # 2. POSISI KANAN: USER
+    pdf.set_xy(110, y_start)
+    pdf.set_font("Times", '', 10)
+    pdf.cell(80, 5, "Mengetahui / User,", ln=True, align='C')
+    
+    if user_sig is not None:
+        img_data = user_sig.astype(np.uint8)
+        im = Image.fromarray(img_data)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_u:
+            im.save(tmp_u.name)
+            pdf.image(tmp_u.name, x=130, y=y_start+5, w=40)
+            
+    # Nama User (di bawah TTD)
+    pdf.set_xy(110, y_start+35)
+    pdf.set_font("Times", 'B', 10)
+    pdf.cell(80, 5, f"({ticket_data['Pelapor']})", ln=True, align='C')
+
+    # --- LAMPIRAN FOTO ---
     if image_file:
-        pdf.add_page() # Halaman Baru Khusus Foto
+        pdf.add_page()
         pdf.set_font("Times", 'B', 14)
         pdf.cell(0, 10, "LAMPIRAN DOKUMENTASI", ln=True, align='C')
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             tmp.write(image_file.getvalue())
-            # Foto ditaruh di tengah, agak besar
             pdf.image(tmp.name, x=15, y=30, w=180)
 
     return pdf.output(dest="S").encode("latin1")
@@ -314,6 +331,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
