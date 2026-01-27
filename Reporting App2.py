@@ -63,7 +63,7 @@ def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
             pdf.image(tmp.name, x=10, y=30, w=100)
             
     if signature_img is not None:
-        pdf.ln(5); pdf.cell(0, 15, "Tanda Tangan User:", ln=True)
+        pdf.ln(2); pdf.cell(0, 15, "Tanda Tangan User:", ln=True)
         img_data = signature_img.astype(np.uint8)
         im = Image.fromarray(img_data)
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_sig:
@@ -248,8 +248,19 @@ elif menu == "🔧 Dashboard Teknisi":
                 cat = st.text_area(f"Laporan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                 c1, c2 = st.columns(2)
                 with c1: cam = st.camera_input("Foto", key=f"f{r['ID Tiket']}")
-                with c2: st.write("TTD User:"); ttd = st_canvas(height=100, width=200, key=f"t{r['ID Tiket']}")
+                with c2: st.write("TTD User:"); 
+                ttd = st_canvas(
+                    fill_color="rgba(255, 165, 0, 0.3)",
+                    stroke_width=2,      # <--- INI KUNCINYA! (2 = Tipis seperti Pulpen)
+                    stroke_color="#000000",
+                    background_color="#eeeeee",
+                    height=150,
+                    width=300,
+                    drawing_mode="freedraw",
+                    key=f"canvas_{r['ID Tiket']}" # Pastikan key-nya sesuai variabel di loopingmu
+                )
                 
+
                 if st.button("✅ SELESAI", key=f"d{r['ID Tiket']}", type="primary"):
                     if ttd.image_data is None: st.error("Butuh TTD!")
                     else:
@@ -282,6 +293,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
