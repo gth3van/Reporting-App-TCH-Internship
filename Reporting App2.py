@@ -165,7 +165,7 @@ if menu == "📝 Buat Laporan":
                 st.success(f"Terkirim! ID: {new_id}")
 
 # ================= MENU 2: STATUS =================
-elif menu == "🔍 Cek Status":
+elif menu == "🔍 Cek Status Laporan":
     st.title("🔍 Status Laporan")
     if st.button("Refresh"): st.rerun()
     df = load_data()
@@ -175,13 +175,13 @@ elif menu == "🔍 Cek Status":
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1,3,2])
                 with c1: 
-                    if r['Prioritas']=='EMERGENCY': st.error("SOS")
-                    elif r['Prioritas']=='High (Urgent)': st.warning("HIGH")
-                    else: st.info("NOR")
+                    if r['Prioritas']=='EMERGENCY': st.error("🚨 SOS")
+                    elif r['Prioritas']=='High (Urgent)': st.warning("⚡ HIGH")
+                    else: st.info("🟢 NORMAL")
                 with c2: st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}"); st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
                 with c3: 
-                    if r['Status']=='OPEN': st.write("⏳ Menunggu")
-                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} OTW</div>', unsafe_allow_html=True)
+                    if r['Status']=='OPEN': st.write("⏳ Menunggu Teknisi")
+                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} Menuju Lokasi</div>', unsafe_allow_html=True)
                     elif r['Status']=='PENDING': st.markdown(f'<div class="status-pending">⏳ PENDING</div>', unsafe_allow_html=True)
 
 # ================= MENU 3: TEKNISI =================
@@ -260,4 +260,5 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
