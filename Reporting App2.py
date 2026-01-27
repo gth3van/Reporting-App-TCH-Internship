@@ -259,45 +259,44 @@ elif menu == "🔧 Dashboard Teknisi":
         
         if open_t.empty: st.info("Tidak ada tiket baru.")
         else:
-            for i, r in prog_t.iterrows():
-                for i, r in prog_t.iterrows():
-                    with st.container(border=True):
-                        # Header Status
-                        if r['Prioritas']=='EMERGENCY': st.error(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
-                        elif r['Prioritas']=='High (Urgent)': st.warning(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (HIGH)")
-                        else: st.info(f"🔧 {r['ID Tiket']} - {r['Nama Alat']}")
+             for i, r in prog_t.iterrows():
+                 with st.container(border=True):
+                     # Header Status
+                    if r['Prioritas']=='EMERGENCY': st.error(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
+                    elif r['Prioritas']=='High (Urgent)': st.warning(f"🔧 {r['ID Tiket']} - {r['Nama Alat']} (HIGH)")
+                    else: st.info(f"🔧 {r['ID Tiket']} - {r['Nama Alat']}")
                 
-                        # Form Input
-                        cat = st.text_area(f"Laporan Pengerjaan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
-                        cam = st.camera_input("Foto Bukti (Opsional)", key=f"f{r['ID Tiket']}")
+                      # Form Input
+                    cat = st.text_area(f"Laporan Pengerjaan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
+                    cam = st.camera_input("Foto Bukti (Opsional)", key=f"f{r['ID Tiket']}")
                 
-                        st.write("---")
-                        st.write("✍️ **Tanda Tangan Digital:**")
+                    st.write("---")
+                    st.write("✍️ **Tanda Tangan Digital:**")
                 
-                        # Layout 2 Kolom untuk TTD
-                        col_ttd1, col_ttd2 = st.columns(2)
+                    # Layout 2 Kolom untuk TTD
+                    col_ttd1, col_ttd2 = st.columns(2)
                 
-                        with col_ttd1:
-                            st.caption(f"Teknisi: {r['Teknisi']}")
-                            ttd_tek = st_canvas(
-                                fill_color="rgba(255, 165, 0, 0.3)",
-                                stroke_width=2, stroke_color="#000000",
-                                background_color="#eeeeee",
-                                height=150, width=250, # Ukuran disesuaikan
-                                drawing_mode="freedraw",
-                                key=f"ttd_tek_{r['ID Tiket']}"
-                            )
+                    with col_ttd1:
+                        st.caption(f"Teknisi: {r['Teknisi']}")
+                        ttd_tek = st_canvas(
+                            fill_color="rgba(255, 165, 0, 0.3)",
+                            stroke_width=2, stroke_color="#000000",
+                            background_color="#eeeeee",
+                            height=150, width=250, # Ukuran disesuaikan
+                            drawing_mode="freedraw",
+                            key=f"ttd_tek_{r['ID Tiket']}"
+                        )
                             
-                        with col_ttd2:
-                            st.caption(f"User: {r['Pelapor']}")
-                            ttd_user = st_canvas(
-                                fill_color="rgba(255, 165, 0, 0.3)",
-                                stroke_width=2, stroke_color="#000000",
-                                background_color="#eeeeee",
-                                height=150, width=250,
-                                drawing_mode="freedraw",
-                                key=f"ttd_user_{r['ID Tiket']}"
-                            )
+                    with col_ttd2:
+                        st.caption(f"User: {r['Pelapor']}")
+                        ttd_user = st_canvas(
+                            fill_color="rgba(255, 165, 0, 0.3)",
+                            stroke_width=2, stroke_color="#000000",
+                            background_color="#eeeeee",
+                            height=150, width=250,
+                            drawing_mode="freedraw",
+                            key=f"ttd_user_{r['ID Tiket']}"
+                        )
 
                 # Tombol Selesai
                 if st.button("✅ SIMPAN & BUAT BERITA ACARA", key=f"d{r['ID Tiket']}", type="primary"):
@@ -377,6 +376,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
