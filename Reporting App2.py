@@ -216,30 +216,30 @@ elif menu == "🔍 Cek Status Laporan":
     
     df = load_data()
     if not df.empty:
-        # ⚠️ PERBAIKAN: Jangan buang yang DONE, tapi urutkan ke bawah
-        # Logic: 0 = Aktif, 1 = Done (Biar Done ditaruh di bawah)
+        # ⚠️ PERBAIKAN: Jangan buang tiket 'DONE', tapi urutkan ke paling bawah
+        # Logic: 0 = Aktif, 1 = Done (Supaya Done ada di bawah)
         df['sort_val'] = df['Status'].apply(lambda x: 1 if x == 'DONE' else 0)
         
-        # Sortir: Yang Aktif duluan, baru berdasarkan Waktu Lapor terbaru
+        # Sortir: Yang Aktif (0) duluan, baru urutkan berdasarkan Waktu Lapor terbaru
         df = df.sort_values(by=['sort_val', 'Waktu Lapor'], ascending=[True, False])
         
         for i, r in df.iterrows():
             with st.container(border=True):
                 c1, c2, c3 = st.columns([1,3,2])
                 
-                # Kolom 1: Ikon Status
+                # Kolom 1: Indikator Warna
                 with c1: 
                     if r['Prioritas']=='EMERGENCY': st.error("🚨 SOS")
                     elif r['Prioritas']=='High (Urgent)': st.warning("⚡ HIGH")
                     else: st.info("🟢 NORMAL")
                 
-                # Kolom 2: Info Alat
+                # Kolom 2: Detail Alat
                 with c2: 
                     st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}")
                     st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
-                    # Tampilkan alasan jika PENDING
+                    # Tampilkan alasan jika sedang dipending
                     if r['Status'] == 'PENDING':
-                        st.warning(f"⚠️ Alasan Pending: {r['Catatan']}")
+                        st.warning(f"⚠️ Menunggu Vendor/Sparepart: {r['Catatan']}")
                 
                 # Kolom 3: Status & Tombol Download
                 with c3: 
@@ -249,21 +249,22 @@ elif menu == "🔍 Cek Status Laporan":
                     elif r['Status']=='DONE':
                         st.success("✅ SELESAI")
                         
-                        # --- FITUR DOWNLOAD PDF ---
-                        # Cek apakah ada data PDF di database
+                        # --- TOMBOL DOWNLOAD PDF ---
+                        # Cek apakah ada data PDF (Base64) di database
                         if r['PDF_File'] and r['PDF_File'] != "None" and pd.notna(r['PDF_File']):
                             try:
-                                # Decode teks base64 kembali jadi file PDF
+                                # Ubah teks Base64 kembali menjadi file PDF
                                 b64_pdf = r['PDF_File']
                                 pdf_bytes = base64.b64decode(b64_pdf)
                                 st.download_button("📄 Unduh BA", pdf_bytes, f"BA_{r['ID Tiket']}.pdf", "application/pdf", key=f"dl_{r['ID Tiket']}")
                             except:
                                 st.caption("Gagal memuat PDF")
                         else:
-                            st.caption("PDF belum tersedia")
+                            st.caption("PDF tidak tersedia")
     else:
         st.info("Belum ada data laporan.")
-## ================= MENU 3: TEKNISI =================
+        
+# ================= MENU 3: TEKNISI =================
 elif menu == "🔧 Dashboard Teknisi":
     st.title("🔧 Dashboard ATEM")
     if st.button("🔄 Refresh Data"): st.rerun()
@@ -307,17 +308,19 @@ elif menu == "🔧 Dashboard Teknisi":
         # BAGIAN 2: SEDANG DIKERJAKAN
         # -------------------------------------------
         st.subheader("🛠 Sedang Dikerjakan")
-        # Kita ambil yang ON PROGRESS
+        # Filter hanya tiket yang ON PROGRESS
         prog_t = df[df['Status']=='ON PROGRESS']
         
         if prog_t.empty:
-            st.caption("Belum ada pekerjaan aktif.")
+            st.caption("Tidak ada pekerjaan aktif.")
         else:
             for i, r in prog_t.iterrows():
                 with st.container(border=True):
+                    # Header Status
                     if r['Prioritas']=='EMERGENCY': st.error(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']} (SOS)")
                     else: st.info(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']}")
                     
+                    # Input Laporan
                     cat = st.text_area(f"Laporan Pengerjaan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                     cam = st.camera_input("Foto Bukti (Opsional)", key=f"f{r['ID Tiket']}")
                     
@@ -330,39 +333,41 @@ elif menu == "🔧 Dashboard Teknisi":
                         st.caption(f"User: {r['Pelapor']}")
                         ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", background_color="#FFF", height=150, width=250, key=f"us_{r['ID Tiket']}")
 
+                    # Tombol Aksi (Dibagi 2 kolom: Selesai & Pending)
                     col_act1, col_act2 = st.columns(2)
                     
-                    # TOMBOL SELESAI
+                    # TOMBOL 1: SELESAI
                     with col_act1:
                         if st.button("✅ SELESAI & SIMPAN", key=f"d{r['ID Tiket']}", type="primary"):
                             if ttd_tek.image_data is None or ttd_user.image_data is None:
                                 st.error("⚠️ Tanda tangan wajib diisi keduanya!")
                             else:
-                                # 1. Update Data
+                                # 1. Update Status
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
                                 
-                                # 2. Generate PDF & Convert to Base64
+                                # 2. Buat PDF & Simpan ke DB
                                 pdf_bytes = create_pdf(r, cam, ttd_user.image_data, ttd_tek.image_data, cat)
                                 pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'PDF_File']=pdf_b64
                                 
-                                # 3. Save & Notify
+                                # 3. Simpan & Refresh
                                 save_data(df)
                                 kirim_notifikasi_telegram(f"🎉 Tiket {r['ID Tiket']} SELESAI ({r['Teknisi']}).")
                                 st.success("Data tersimpan!")
-                                st.rerun() # 👈 Refresh agar hilang dari list
+                                st.rerun() # 👈 Ini yang bikin form langsung hilang
 
-                    # TOMBOL PENDING (VENDOR)
+                    # TOMBOL 2: TUNDA / PENDING
                     with col_act2:
                         if st.button("⏳ TUNDA (VENDOR/SPAREPART)", key=f"p{r['ID Tiket']}"):
                             if not cat:
-                                st.error("Isi alasan penundaan di kolom laporan!")
+                                st.error("⚠️ Mohon isi alasan penundaan di kolom laporan di atas!")
                             else:
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='PENDING'
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
                                 save_data(df)
                                 kirim_notifikasi_telegram(f"⚠️ Tiket {r['ID Tiket']} DIPENDING (Vendor). Alasan: {cat}")
+                                st.success("Status diubah jadi Pending.")
                                 st.rerun()
 
         st.markdown("---")
@@ -382,12 +387,13 @@ elif menu == "🔧 Dashboard Teknisi":
                     with c1:
                         st.write(f"**{r['ID Tiket']}** - {r['Nama Alat']}")
                         st.warning(f"Alasan: {r['Catatan']}")
-                        st.caption(f"Teknisi: {r['Teknisi']}")
+                        st.caption(f"Teknisi Terakhir: {r['Teknisi']}")
                     with c2:
                         # Tombol Lanjut Kerja
                         if st.button("▶️ LANJUT KERJAKAN", key=f"res{r['ID Tiket']}"):
                             df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='ON PROGRESS'
                             save_data(df)
+                            kirim_notifikasi_telegram(f"▶️ Tiket {r['ID Tiket']} dilanjutkan kembali.")
                             st.rerun()
 
 # ================= MENU 4: ADMIN =================
@@ -411,4 +417,5 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
