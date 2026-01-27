@@ -248,8 +248,7 @@ elif menu == "🔧 Dashboard Teknisi":
                 cat = st.text_area(f"Laporan ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                 c1, c2 = st.columns(2)
                 with c1: cam = st.camera_input("Foto", key=f"f{r['ID Tiket']}")
-                with c2: st.write("TTD User:"); 
-                ttd = st_canvas(
+                with c2: st.write("TTD User:"); ttd = st_canvas(
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=2,      # <--- INI KUNCINYA! (2 = Tipis seperti Pulpen)
                     stroke_color="#000000",
@@ -293,6 +292,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
