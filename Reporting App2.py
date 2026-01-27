@@ -275,8 +275,8 @@ elif menu == "🔧 Dashboard Teknisi":
                     
                     st.write("✍️ **Tanda Tangan:**")
                     c1, c2 = st.columns(2)
-                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
-                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
+                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF",stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
+                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
 
                     ac1, ac2 = st.columns(2)
                     
@@ -343,3 +343,4 @@ elif menu == "🔐 Admin":
             
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download CSV", csv, "Backup_ATEM.csv", "text/csv")
+
