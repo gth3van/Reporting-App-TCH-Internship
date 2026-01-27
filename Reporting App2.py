@@ -274,7 +274,7 @@ elif menu == "🔧 Dashboard Teknisi":
                     fill_color="rgba(255, 165, 0, 0.3)",
                     stroke_width=2,      # <--- INI KUNCINYA! (2 = Tipis seperti Pulpen)
                     stroke_color="#000000",
-                    background_color="#eeeeee",
+                    background_color="#FFFFFF",
                     height=150,
                     width=300,
                     drawing_mode="freedraw",
@@ -314,6 +314,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
