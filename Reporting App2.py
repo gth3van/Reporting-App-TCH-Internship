@@ -30,13 +30,13 @@ def kirim_notifikasi_telegram(pesan):
 def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
     pdf = FPDF()
     pdf.add_page()
-    pdf.set_font("Times New Roman", 'B', 16)
+    pdf.set_font("Times", 'B', 16)
     pdf.cell(0, 10, "BERITA ACARA PERBAIKAN ALAT MEDIS", ln=True, align='C')
-    pdf.set_font("Times New Roman", 'I', 10)
+    pdf.set_font("Times", 'I', 10)
     pdf.cell(0, 10, "TZU CHI HOSPITAL - DEPARTEMEN ATEM", ln=True, align='C')
     pdf.line(10, 30, 200, 30); pdf.ln(10)
     
-    pdf.set_font("Times New Roman", '', 12)
+    pdf.set_font("Times", '', 12)
     fields = [
         f"No. Tiket: {ticket_data['ID Tiket']}",
         f"Tanggal: {ticket_data['Waktu Lapor']}",
@@ -46,13 +46,13 @@ def create_pdf(ticket_data, image_file, signature_img, catatan_teknisi):
     for f in fields: pdf.cell(0, 8, f, ln=True)
     pdf.ln(5)
     
-    pdf.set_font("Times New Roman", 'B', 12); pdf.cell(0, 10, "DETAIL KERUSAKAN", ln=True)
-    pdf.set_font("Times New Roman", '', 12)
+    pdf.set_font("Times", 'B', 12); pdf.cell(0, 10, "DETAIL KERUSAKAN", ln=True)
+    pdf.set_font("Times", '', 12)
     pdf.multi_cell(0, 8, f"Alat: {ticket_data['Nama Alat']} ({ticket_data['Nomor Serial']})\nKeluhan: {ticket_data['Keluhan']}")
     pdf.ln(5)
     
-    pdf.set_font("Times New Roman", 'B', 12); pdf.cell(0, 10, "TINDAKAN TEKNISI", ln=True)
-    pdf.set_font("Times New Roman", '', 12)
+    pdf.set_font("Times", 'B', 12); pdf.cell(0, 10, "TINDAKAN TEKNISI", ln=True)
+    pdf.set_font("Times", '', 12)
     pdf.multi_cell(0, 8, f"Teknisi: {ticket_data['Teknisi']}\nSolusi: {catatan_teknisi}")
     pdf.ln(5)
     
@@ -282,6 +282,7 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
 
