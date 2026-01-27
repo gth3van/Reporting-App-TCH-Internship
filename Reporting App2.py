@@ -50,13 +50,11 @@ def create_pdf(ticket_data, image_file, user_sig, tech_sig, catatan_teknisi):
     for f in fields: pdf.cell(0, 8, f, ln=True)
     pdf.ln(5)
     
-    # Detail Kerusakan
     pdf.set_font("Times", 'B', 12); pdf.cell(0, 10, "DETAIL KERUSAKAN", ln=True)
     pdf.set_font("Times", '', 12)
     pdf.multi_cell(0, 8, f"Alat: {ticket_data['Nama Alat']} ({ticket_data['Nomor Serial']})\nKeluhan: {ticket_data['Keluhan']}")
     pdf.ln(5)
     
-    # Tindakan Teknisi
     pdf.set_font("Times", 'B', 12); pdf.cell(0, 10, "TINDAKAN TEKNISI", ln=True)
     pdf.set_font("Times", '', 12)
     pdf.multi_cell(0, 8, f"Teknisi: {ticket_data['Teknisi']}\nSolusi: {catatan_teknisi}")
@@ -131,31 +129,33 @@ def init_db():
 
 init_db()
 
-# --- FUNGSI LOAD & SAVE ---
+# --- FUNGSI LOAD & SAVE (DIPERBAIKI) ---
 
 @st.cache_data(ttl=10)
 def load_data():
     try:
+        # ttl=0 MEMAKSA AMBIL DATA BARU (Agar update real-time)
         df = conn.query('SELECT * FROM laporan;', ttl=0)
         if 'PDF_File' not in df.columns: df['PDF_File'] = None
         return df
     except Exception as e:
         return pd.DataFrame(columns=["ID Tiket","Waktu Lapor","Pelapor","Ruangan","Nama Alat","Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan","PDF_File"])
 
+# PERBAIKAN: Fungsi save_data ditaruh di level paling luar agar dikenali
 def save_data(df):
     try:
         df.to_sql('laporan', conn.engine, if_exists='replace', index=False)
-        load_data.clear() 
+        load_data.clear() # Hapus cache agar data di layar langsung berubah
     except Exception as e:
         st.error(f"Gagal menyimpan: {e}")
 
 # ==========================================
-# 🏥 MENU NAVIGASI
+# 🏥 MENU NAVIGASI UTAMA
 # ==========================================
 st.sidebar.title("🏥 Navigasi")
 menu = st.sidebar.radio("Menu", ["📝 Buat Laporan", "🔍 Cek Status Laporan", "🔧 Dashboard Teknisi", "🔐 Admin"])
 
-# --- MENU 1: BUAT LAPORAN (DENGAN VALIDASI) ---
+# --- MENU 1: BUAT LAPORAN ---
 if menu == "📝 Buat Laporan":
     darurat = st.sidebar.toggle("🚨 MODE DARURAT")
     if darurat:
@@ -175,20 +175,14 @@ if menu == "📝 Buat Laporan":
         st.title("📝 Lapor Kerusakan")
         with st.form("f2"):
             c1, c2 = st.columns(2)
-            with c1: pelapor = st.text_input("Nama Pelapor")
-            with c2: 
-                alat = st.text_input("Nama Alat")
-                # Bisa tambah validasi SN kalau mau, tapi optional
-                sn = st.text_input("SN Alat") 
-                prio = st.selectbox("Prioritas", ["Normal", "High (Urgent)"])
-                
-            loc = st.selectbox("Lokasi", ["ICU","IGD","OT","Rawat Inap","Poli","Radiologi"])
+            with c1: pelapor = st.text_input("Nama Pelapor"); loc = st.selectbox("Lokasi", ["ICU","IGD","OT","Rawat Inap","Poli","Radiologi"])
+            with c2: alat = st.text_input("Nama Alat"); sn = st.text_input("SN Alat"); prio = st.selectbox("Prioritas", ["Normal", "High (Urgent)"])
             kel = st.text_area("Keluhan / Kronologi")
             
-            # 👇 LOGIKA VALIDASI ADA DI SINI
+            # --- Validasi: Tombol Kirim ---
             if st.form_submit_button("Kirim Laporan"):
                 if not pelapor or not alat:
-                    st.error("⚠️ GAGAL KIRIM: Nama Pelapor dan Nama Alat WAJIB diisi!")
+                    st.error("⚠️ Nama Pelapor dan Nama Alat WAJIB diisi!")
                 else:
                     df = load_data()
                     new_id = f"TC-{len(df)+1:03d}"
@@ -197,15 +191,16 @@ if menu == "📝 Buat Laporan":
                     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                     save_data(df)
                     kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat}\n⚠️ {prio}\n *Keluhan: * {kel}")
-                    st.success(f"✅ Terkirim! ID: {new_id}")
+                    st.success(f"Terkirim! ID: {new_id}")
 
-# --- MENU 2: STATUS & DOWNLOAD ---
+# --- MENU 2: CEK STATUS & DOWNLOAD ---
 elif menu == "🔍 Cek Status Laporan":
     st.title("🔍 Status Laporan")
     if st.button("Refresh"): st.rerun()
     df = load_data()
     
     if not df.empty:
+        # Urutkan: Tiket Selesai (DONE) ditaruh paling bawah
         df['sort_val'] = df['Status'].apply(lambda x: 1 if x == 'DONE' else 0)
         df = df.sort_values(by=['sort_val', 'Waktu Lapor'], ascending=[True, False])
         
@@ -221,9 +216,9 @@ elif menu == "🔍 Cek Status Laporan":
                     st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
                     if r['Status'] == 'PENDING': st.warning(f"⚠️ PENDING: {r['Catatan']}")
                 with c3: 
-                    if r['Status']=='OPEN': st.write("⏳ Menunggu")
+                    if r['Status']=='OPEN': st.write("⏳ Menunggu Teknisi")
                     elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} OTW</div>', unsafe_allow_html=True)
-                    elif r['Status']=='PENDING': st.markdown(f'<div class="status-pending">⏳ PENDING</div>', unsafe_allow_html=True)
+                    elif r['Status']=='PENDING': st.markdown(f'<div class="status-pending">⏳ MENUNGGU VENDOR</div>', unsafe_allow_html=True)
                     elif r['Status']=='DONE': 
                         st.success("✅ SELESAI")
                         if r['PDF_File'] and r['PDF_File'] != "None" and pd.notna(r['PDF_File']):
@@ -279,15 +274,18 @@ elif menu == "🔧 Dashboard Teknisi":
                 with st.container(border=True):
                     st.info(f"🔧 PENGERJAAN: {r['ID Tiket']} - {r['Nama Alat']}")
                     
-                    cat = st.text_area(f"Laporan / Alasan Pending (WAJIB DIISI)", key=f"c{r['ID Tiket']}")
+                    # KOLOM LAPORAN / ALASAN PENDING (WAJIB DIISI)
+                    cat = st.text_area(f"Laporan Pengerjaan / Alasan Pending ({r['ID Tiket']})", key=f"c{r['ID Tiket']}")
                     cam = st.camera_input("Foto Bukti", key=f"f{r['ID Tiket']}")
                     
                     st.write("✍️ **Tanda Tangan:**")
                     c1, c2 = st.columns(2)
-                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
-                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
+                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF",stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
+                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
 
                     ac1, ac2 = st.columns(2)
+                    
+                    # TOMBOL SELESAI
                     with ac1:
                         if st.button("✅ SELESAI & SIMPAN", key=f"d{r['ID Tiket']}", type="primary"):
                             if ttd_tek.image_data is None or ttd_user.image_data is None:
@@ -295,16 +293,20 @@ elif menu == "🔧 Dashboard Teknisi":
                             else:
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='DONE'
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
+                                # PDF
                                 pdf_bytes = create_pdf(r, cam, ttd_user.image_data, ttd_tek.image_data, cat)
                                 pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'PDF_File']=pdf_b64
+                                
                                 save_data(df)
                                 kirim_notifikasi_telegram(f"🎉 Tiket {r['ID Tiket']} SELESAI.")
                                 st.success("Tersimpan!"); st.rerun()
 
+                    # TOMBOL PENDING (VENDOR)
                     with ac2:
                         if st.button("⏳ TUNDA (VENDOR)", key=f"p{r['ID Tiket']}"):
-                            if not cat: st.error("⚠️ Tulis alasan penundaan di kotak 'Laporan' di atas!")
+                            if not cat: 
+                                st.error("⚠️ Tulis alasan penundaan di kotak 'Laporan' di atas!")
                             else:
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='PENDING'
                                 df.loc[df['ID Tiket']==r['ID Tiket'], 'Catatan']=cat
@@ -322,43 +324,81 @@ elif menu == "🔧 Dashboard Teknisi":
             for i, r in pend_t.iterrows():
                 with st.container(border=True):
                     c1, c2 = st.columns([3,1])
-                    with c1: st.write(f"**{r['ID Tiket']}** - {r['Nama Alat']}"); st.warning(f"Alasan: {r['Catatan']}")
+                    with c1: 
+                        st.write(f"**{r['ID Tiket']}** - {r['Nama Alat']}")
+                        st.warning(f"Alasan: {r['Catatan']}")
                     with c2: 
                         if st.button("▶️ LANJUT", key=f"r{r['ID Tiket']}"):
                             df.loc[df['ID Tiket']==r['ID Tiket'], 'Status']='ON PROGRESS'
                             save_data(df)
                             st.rerun()
 
-# --- MENU 4: ADMIN ---
+# ================= MENU 4: ADMIN =================
 elif menu == "🔐 Admin":
     st.title("Admin SQL Database")
-    if st.text_input("Password", type="password") == PASSWORD_ADMIN:
+    
+    # Password Protection
+    password = st.text_input("Masukkan Password Admin:", type="password")
+    
+    if password == PASSWORD_ADMIN:
         df = load_data()
+        
+        # Tampilkan Statistik & Tabel
+        st.write(f"Total Laporan: **{len(df)}**")
         st.dataframe(df, use_container_width=True)
         
         st.divider()
-        st.subheader("🗑️ Hapus Data Tertentu")
-        to_del = st.multiselect("Pilih ID Tiket:", options=df['ID Tiket'].tolist())
-        if st.button(f"⚠️ Hapus {len(to_del)} Data", type="primary"):
-            if to_del:
-                df = df[~df['ID Tiket'].isin(to_del)]
-                save_data(df)
-                st.success("Data Terhapus!"); st.rerun()
         
+        # --- FITUR 1: HAPUS MASSAL (BULK DELETE) ---
+        st.subheader("🗑️ Hapus Data Tertentu")
+        
+        # Multiselect agar bisa hapus banyak sekaligus
+        to_del = st.multiselect(
+            "Pilih ID Tiket yang ingin dihapus:",
+            options=df['ID Tiket'].tolist()
+        )
+        
+        if st.button(f"⚠️ Hapus {len(to_del)} Data Terpilih", type="primary"):
+            if to_del:
+                # Ambil data yang TIDAK dicentang (kebalikan)
+                df_baru = df[~df['ID Tiket'].isin(to_del)]
+                save_data(df_baru)
+                st.success(f"Berhasil menghapus {len(to_del)} data!")
+                st.rerun()
+            else:
+                st.warning("Pilih dulu data yang mau dihapus.")
+
         st.divider()
+
+        # --- FITUR 2: RESET DATABASE TOTAL (PERBAIKAN ERROR) ---
         c1, c2 = st.columns(2)
+        
         with c1:
-            if st.button("🔥 RESET DATABASE TOTAL", type="primary"):
+            st.subheader("🔥 Reset Database")
+            if st.button("HAPUS SEMUA DATA (RESET)", type="primary"):
                 try:
+                    # 👇 PERBAIKAN DISINI: Pakai session, bukan conn.query
                     with conn.session as s:
                         s.execute(text("DROP TABLE IF EXISTS laporan;"))
                         s.commit()
-                    init_db(); load_data.clear()
-                    st.error("Database Bersih!"); st.rerun()
-                except Exception as e: st.error(e)
+                    
+                    init_db()         # Bikin tabel kosong baru
+                    load_data.clear() # Bersihkan cache memori
+                    
+                    st.error("Database telah dikosongkan total!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Gagal reset: {e}")
+                
         with c2:
+            st.subheader("📥 Backup Data")
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Backup (CSV)", csv, "Backup_ATEM.csv", "text/csv")
-
+            st.download_button(
+                label="Download Excel/CSV Lengkap", 
+                data=csv, 
+                file_name="Backup_ATEM.csv", 
+                mime="text/csv"
+            )
+            
     elif password:
         st.error("Password Salah!")
