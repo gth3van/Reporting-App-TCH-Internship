@@ -136,7 +136,7 @@ if menu == "📝 Buat Laporan":
     if darurat:
         st.markdown('<div class="emergency-box">🚨 FORMULIR DARURAT 🚨</div>', unsafe_allow_html=True)
         with st.form("f1"):
-            loc = st.selectbox("LOKASI:", ["ICU","IGD","OK","NICU","Rawat Inap","Radiologi","Hemodialisa"])
+            loc = st.selectbox("LOKASI:", ["ICU","IGD","OT","NICU","Rawat Inap","Radiologi","Hemodialisa"])
             if st.form_submit_button("🚨 PANGGIL TEKNISI"):
                 df = load_data()
                 new_id = f"URGENT-{len(df)+1:03d}"
@@ -148,20 +148,20 @@ if menu == "📝 Buat Laporan":
                 kirim_notifikasi_telegram(f"🚨 *SOS!* {loc}\nID: {new_id}")
                 st.error(f"Sinyal Terkirim ke {loc}!")
     else:
-        st.title("📝 Lapor Rutin")
+        st.title("📝 Laporan Kerusakan")
         with st.form("f2"):
             c1, c2 = st.columns(2)
-            with c1: pelapor = st.text_input("Nama"); loc = st.selectbox("Lokasi", ["ICU","IGD","OK","Rawat Inap","Poli","Radiologi"])
-            with c2: alat = st.text_input("Alat"); sn = st.text_input("SN"); prio = st.selectbox("Prio", ["Normal", "High (Urgent)"])
-            kel = st.text_area("Keluhan")
-            if st.form_submit_button("Kirim"):
+            with c1: pelapor = st.text_input("Nama Pelapor"); loc = st.selectbox("Lokasi", ["ICU","IGD","OT","Rawat Inap","Poli","Radiologi"])
+            with c2: alat = st.text_input("Nama Alat"); sn = st.text_input("Serial Number"); prio = st.selectbox("Priority", ["Normal", "High (Urgent)"])
+            kel = st.text_area("Kronologi/Keluhan")
+            if st.form_submit_button("Kirim Laporan"):
                 df = load_data()
                 new_id = f"TC-{len(df)+1:03d}"
                 now = datetime.now().strftime("%Y-%m-%d %H:%M")
                 new_row = {"ID Tiket": new_id, "Waktu Lapor": now, "Pelapor": pelapor, "Ruangan": loc, "Nama Alat": alat, "Nomor Serial": sn if sn else "-", "Keluhan": kel, "Prioritas": prio, "Status": "OPEN", "Teknisi": "-", "Catatan": "-"}
                 df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(df)
-                kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat}\n⚠️ {prio}")
+                kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat}\n⚠️ {prio}\n *Keluhan/Kronologi: * {kel}")
                 st.success(f"Terkirim! ID: {new_id}")
 
 # ================= MENU 2: STATUS =================
@@ -260,3 +260,4 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
