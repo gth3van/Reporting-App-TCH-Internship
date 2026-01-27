@@ -150,11 +150,14 @@ init_db()
 
 # --- OPTIMIZED LOAD & SAVE FUNCTIONS ---
 
-@st.cache_data(ttl=10)
+@st.cache_data(ttl=10) # 🛡️ Lapisan Luar: Melindungi Kuota Neon (Cuma boleh akses tiap 10 detik)
 def load_data():
     try:
-        df = conn.query('SELECT * FROM laporan;')
-        # Check if PDF_File column exists, if not, handle it gracefully
+        # 👇 PERBAIKAN PENTING: Tambahkan ttl=0 di sini!
+        # Artinya: "Hei koneksi, kalau fungsi ini jalan, JANGAN pakai ingatan lama. Ambil baru!"
+        df = conn.query('SELECT * FROM laporan;', ttl=0)
+        
+        # Pastikan kolom PDF_File ada (untuk jaga-jaga database lama)
         if 'PDF_File' not in df.columns:
              df['PDF_File'] = None
         return df
@@ -163,14 +166,6 @@ def load_data():
             "ID Tiket","Waktu Lapor","Pelapor","Ruangan","Nama Alat",
             "Nomor Serial","Keluhan","Prioritas","Status","Teknisi","Catatan","PDF_File"
         ])
-
-def save_data(df):
-    try:
-        df.to_sql('laporan', conn.engine, if_exists='replace', index=False)
-        # 👈 CRITICAL: Clear cache so new data appears immediately
-        load_data.clear() 
-    except Exception as e:
-        st.error(f"Gagal menyimpan: {e}")
         
 # --- SIDEBAR ---
 st.sidebar.title("🏥 Navigasi")
@@ -417,5 +412,6 @@ elif menu == "🔐 Admin":
         st.subheader("📥 Export Excel")
         csv = df.to_csv(index=False).encode('utf-8')
         st.download_button("Download Semua Data (CSV)", csv, "Backup_ATEM.csv", "text/csv")
+
 
 
