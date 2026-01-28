@@ -207,7 +207,7 @@ if menu == "📝 Buat Laporan":
         with st.form("f2"):
             c1, c2 = st.columns(2)
             with c1: pelapor = st.text_input("Nama Pelapor"); loc = st.selectbox("Lokasi", ["ICU","IGD","OT","Rawat Inap","Poli","Radiologi"])
-            with c2: alat = st.text_input("Nama Alat"); sn = st.text_input("SN Alat"); prio = st.selectbox("Prioritas", ["Normal", "High (Urgent)"])
+            with c2: alat = st.text_input("Nama Alat"); sn = st.text_input("SN Alat"); prio = st.selectbox("Prioritas", ["🟢 Normal", "🟡 High (Urgent)"])
             kel = st.text_area("Keluhan / Kronologi")
             
             if st.form_submit_button("Kirim Laporan"):
@@ -229,7 +229,7 @@ if menu == "📝 Buat Laporan":
                     new_row.to_sql('laporan', conn.engine, if_exists='append', index=False)
                     load_data_ringan.clear()
                     
-                    kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat}\n⚠️ {prio}\n *Keluhan: * {kel}")
+                    kirim_notifikasi_telegram(f"📝 *Tiket:* {new_id}\n📍 {loc} - {alat} {sn}\n⚠️ {prio}\n *Keluhan: * {kel}")
                     st.success(f"Terkirim! ID: {new_id}")
 
 # --- MENU 2: STATUS (OPTIMISASI BESAR) ---
@@ -274,15 +274,15 @@ elif menu == "🔍 Cek Status & Download":
                 c1, c2, c3 = st.columns([1,3,2])
                 with c1: 
                     if r['Prioritas']=='EMERGENCY': st.error("SOS")
-                    elif r['Prioritas']=='High (Urgent)': st.warning("HIGH")
-                    else: st.info("🟢 Normal")
+                    elif r['Prioritas']=='High (Urgent)': st.warning("🟡 HIGH")
+                    else: st.info("🟢 NORMAL")
                 with c2: 
                     st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}")
                     st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
                     if r['Status'] == 'PENDING': st.warning(f"⚠️ PENDING: {r['Catatan']}")
                 with c3: 
-                    if r['Status']=='OPEN': st.write("⏳ Menunggu")
-                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} OTW</div>', unsafe_allow_html=True)
+                    if r['Status']=='OPEN': st.write("⏳ Menunggu Teknisi")
+                    elif r['Status']=='ON PROGRESS': st.markdown(f'<div class="status-otw">🏃 {r["Teknisi"]} Menuju Lokasi</div>', unsafe_allow_html=True)
                     elif r['Status']=='PENDING': st.markdown(f'<div class="status-pending">⏳ PENDING</div>', unsafe_allow_html=True)
                     elif r['Status']=='DONE': st.success("✅ SELESAI")
     else:
@@ -423,4 +423,5 @@ elif menu == "🔐 Admin":
                 init_db(); load_data_ringan.clear()
                 st.error("Database Bersih!"); st.rerun()
             except Exception as e: st.error(e)
+
 
