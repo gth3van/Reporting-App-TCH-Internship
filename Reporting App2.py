@@ -275,7 +275,7 @@ elif menu == "🔍 Cek Status & Download":
                 with c1: 
                     if r['Prioritas']=='EMERGENCY': st.error("SOS")
                     elif r['Prioritas']=='High (Urgent)': st.warning("HIGH")
-                    else: st.info("NOR")
+                    else: st.info("🟢 Normal")
                 with c2: 
                     st.write(f"**{r['Ruangan']}** - {r['Nama Alat']}")
                     st.caption(f"{r['ID Tiket']} | {r['Pelapor']}")
@@ -423,3 +423,4 @@ elif menu == "🔐 Admin":
                 init_db(); load_data_ringan.clear()
                 st.error("Database Bersih!"); st.rerun()
             except Exception as e: st.error(e)
+
