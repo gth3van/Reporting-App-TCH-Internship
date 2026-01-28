@@ -341,8 +341,8 @@ elif menu == "🔧 Dashboard Teknisi":
                     
                     st.write("✍️ **Tanda Tangan:**")
                     c1, c2 = st.columns(2)
-                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
-                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
+                    with c1: st.caption("Teknisi"); ttd_tek = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"tk_{r['ID Tiket']}")
+                    with c2: st.caption("User"); ttd_user = st_canvas(fill_color="rgba(255,165,0,0.3)",background_color="#FFFFFF", stroke_width=2, stroke_color="#000", height=150, width=250, key=f"us_{r['ID Tiket']}")
 
                     ac1, ac2 = st.columns(2)
                     with ac1:
@@ -423,6 +423,7 @@ elif menu == "🔐 Admin":
                 init_db(); load_data_ringan.clear()
                 st.error("Database Bersih!"); st.rerun()
             except Exception as e: st.error(e)
+
 
 
 
