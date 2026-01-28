@@ -303,7 +303,7 @@ elif menu == "🔧 Dashboard Teknisi":
     
     if not df.empty:
         st.subheader("📥 Tiket Masuk")
-        prio_map = {"EMERGENCY":0, "High (Urgent)":1, "Normal":2}
+        prio_map = {"EMERGENCY":0, "🟡 High (Urgent)":1, "🟢 Normal":2}
         df['sort'] = df['Prioritas'].map(prio_map)
         open_t = df[df['Status']=='OPEN'].sort_values('sort')
         
@@ -314,7 +314,7 @@ elif menu == "🔧 Dashboard Teknisi":
                     c1, c2, c3 = st.columns([2,3,2])
                     with c1:
                         if r['Prioritas']=='EMERGENCY': st.error(f"🚨 {r['Ruangan']}")
-                        elif r['Prioritas']=='High (Urgent)': st.warning(f"⚡ {r['Ruangan']}")
+                        elif r['Prioritas']=='🟡 High (Urgent)': st.warning(f"🟡 {r['Ruangan']}")
                         else: st.info(f"🟢 {r['Ruangan']}")
                         st.caption(r['Nama Alat'])
                     with c2: st.write(f"📝 {r['Keluhan']}"); st.caption(r['Pelapor'])
@@ -423,6 +423,7 @@ elif menu == "🔐 Admin":
                 init_db(); load_data_ringan.clear()
                 st.error("Database Bersih!"); st.rerun()
             except Exception as e: st.error(e)
+
 
 
 
