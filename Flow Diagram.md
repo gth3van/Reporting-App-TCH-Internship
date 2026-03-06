@@ -67,6 +67,7 @@ graph TD
     AK --> AL{Password Benar?}
     AL -->|Salah| AM[Akses Disembunyikan]
     AL -->|Benar| AN[Tampilkan Tabel Seluruh Data]
+```
     AN --> AO{Pilih Aksi?}
     AO -->|Hapus ID| AP[Jalankan Query DELETE berdasarkan ID]
     AO -->|Reset Total| AQ[Jalankan Query DROP TABLE]
