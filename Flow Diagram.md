@@ -1,4 +1,4 @@
-'''mermaid
+```mermaid
 graph TD
     A([Mulai Aplikasi]) --> B[Koneksi ke Database PostgreSQL]
     B --> C{Pilih Menu Navigasi}
